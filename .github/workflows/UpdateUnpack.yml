@@ -111,3 +111,26 @@ jobs:
       - name: Clone repositories
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
+
+      - name: Commit TableBundles
+        if: ${{ inputs.Unpack_FlatData }}
+        shell: bash
+        run: |
+          set -e
+
+          cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} BA-Text/
+          cd BA-Text
+
+          for f in DBSchema ExcelTable TableCatalog.json MediaCatalog.json BundlePackingInfo-iOS.json BundlePackingInfo-Android.json; do
+              [ -e "$f" ] || continue
+
+              if [ $(stat -c%s "$f") -gt 104857600 ]; then
+                echo "[$f] >100 MB, compressing to $f.gz"
+                gzip -c "$f" > "$f.gz"
+                git add "$f.gz"
+              else
+                git add "$f"
+              fi
+          done
+          git commit -m "Add version ${BA_VERSION_NAME}"
+          git push origin

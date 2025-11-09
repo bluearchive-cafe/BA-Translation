@@ -1,0 +1,121 @@
+name: Extract new text
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [Extract]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
+
+      - name: Move contents to current directory
+        run: |
+          mv BA-Unpack/* .
+          rm -rf BA-Unpack
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Get new version
+        id: new_ver
+        run: |
+          echo "Current info.json content:"
+          cat info.json
+          echo "Running version.sh on current info.json:"
+          bash version.sh info.json
+          bash version.sh info.json >> "$GITHUB_OUTPUT"
+
+      - name: Find last meaningful change in info.json
+        id: prev_ver
+        run: |
+          CURRENT_CONTENT=$(cat info.json)
+          
+          PREV_COMMIT=""
+          for commit in $(git log --pretty=format:"%H" -- info.json); do
+            PREV_CONTENT=$(git show $commit:info.json 2>/dev/null || echo "")
+            
+            if [ "$PREV_CONTENT" != "$CURRENT_CONTENT" ] && [ -n "$PREV_CONTENT" ]; then
+              PREV_COMMIT=$commit
+              break
+            fi
+          done
+          
+          if [ -z "$PREV_COMMIT" ]; then
+            echo "No previous version with different content found"
+            exit 1
+          fi
+          
+          echo "Found meaningful previous commit: $PREV_COMMIT"
+          git show $PREV_COMMIT:info.json > /tmp/prev_info.json
+          echo "Previous info.json content:"
+          cat /tmp/prev_info.json
+          
+          echo "Running version.sh on previous info.json:"
+          bash version.sh /tmp/prev_info.json
+          bash version.sh /tmp/prev_info.json >> "$GITHUB_OUTPUT"
+          echo "prev_commit=$PREV_COMMIT" >> "$GITHUB_OUTPUT"
+
+      - name: Check version
+        run: |
+          new="${{ steps.new_ver.outputs.BA_VERSION_NAME }}"
+          old="${{ steps.prev_ver.outputs.BA_VERSION_NAME }}"
+          if [[ "$new" == "$old" ]]; then
+            echo "ERROR: Version numbers are the same but content differs!"
+            echo "Current version: $new"
+            echo "Previous version: $old"
+            echo "Current info.json:"
+            cat info.json
+            echo "Previous info.json:"
+            cat /tmp/prev_info.json
+          fi
+          echo "Version changed: $old -> $new"
+
+      - name: Run extract
+        run: |
+          python extract.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text/日服${{ steps.prev_ver.outputs.BA_VERSION_NAME }}.zip" "./BA-Text" config.json 10
+
+      - name: Commit extract text
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          
+          cd BA-Text
+          git add .
+
+          git commit -m "Extract text for version ${{ steps.new_ver.outputs.BA_VERSION_NAME }} (from ${{ steps.prev_ver.outputs.BA_VERSION_NAME }})"
+          git push origin
+
+      - name: Deploy Update
+        run: |
+          curl -sS -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d '{
+              "event_type": "Update",
+              "client_payload": {
+                "source": "auto-updater",
+                "timestamp": "'$(date -u +"%FT%TZ")'"
+              }
+            }'
