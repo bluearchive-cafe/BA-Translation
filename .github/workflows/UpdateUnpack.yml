@@ -70,7 +70,7 @@ jobs:
       - name: Unpack ExcelDB.db and Excel.zip
         if: ${{ inputs.Unpack_FlatData }}
         run: |
-          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData config.json ../BA-Text 10
+          python unpack/unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData config.json ../BA-Text 10
 
       - name: Committing FlatData
         if: ${{ inputs.Unpack_FlatData }}
