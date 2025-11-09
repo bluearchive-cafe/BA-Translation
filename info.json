@@ -1,0 +1,37 @@
+{
+    "JP": {
+        "ServerInfoDataUrl": "https://yostar-serverinfo.bluearchiveyostar.com/r85_62_c4mbuxer0zy6w1exv3l0.json",
+        "AddressableCatalogUrl": "https://prod-clientpatch.bluearchiveyostar.com/r85_koip3m107nrk5f6vtc3b",
+        "APKVersionCode": "378897",
+        "APKVersionName": "1.62.378897",
+        "DefaultConnectionGroup": "Prod-Audit",
+        "SkipTutorial": "false",
+        "Language": "Jp",
+        "version": "1.62.378897",
+        "ConnectionGroups": [
+            {
+                "Name": "Prod-Audit",
+                "ManagementDataUrl": "https://prod-noticeindex.bluearchiveyostar.com/prod/index.json",
+                "IsProductionAddressables": true,
+                "ApiUrl": "https://prod-game.bluearchiveyostar.com:5000/api/",
+                "GatewayUrl": "https://prod-gateway.bluearchiveyostar.com:5100/api/",
+                "KibanaLogUrl": "https://prod-logcollector.bluearchiveyostar.com:5300",
+                "ProhibitedWordBlackListUri": "https://prod-notice.bluearchiveyostar.com/prod/ProhibitedWord/blacklist.csv",
+                "ProhibitedWordWhiteListUri": "https://prod-notice.bluearchiveyostar.com/prod/ProhibitedWord/whitelist.csv",
+                "CustomerServiceUrl": "https://bluearchive.jp/contact-1-hint",
+                "OverrideConnectionGroups": [
+                    {
+                        "Name": "1.0",
+                        "AddressablesCatalogUrlRoot": "https://prod-clientpatch.bluearchiveyostar.com/m28_1_0_1_mashiro3"
+                    },
+                    {
+                        "Name": "1.62",
+                        "AddressablesCatalogUrlRoot": "https://prod-clientpatch.bluearchiveyostar.com/r85_koip3m107nrk5f6vtc3b"
+                    }
+                ],
+                "BundleVersion": "54jt0q7o8z",
+                "IsLivePublished": true
+            }
+        ]
+    }
+}
