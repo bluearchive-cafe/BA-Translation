@@ -54,11 +54,10 @@ jobs:
 
       - name: Clone repositories
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Unpack.git
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
 
-      - name: cd unpack
+      - name: cd Unpack
         run: cd BA-Unpack
 
       - name: Setup FlatData
