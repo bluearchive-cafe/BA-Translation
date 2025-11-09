@@ -57,28 +57,26 @@ jobs:
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
 
-      - name: cd Unpack
-        run: cd BA-Unpack
-
       - name: Setup FlatData
         if: ${{ inputs.Unpack_FlatData }}
         run: |
-          python setup_flatdata.py
+          python BA-Unpack/setup_flatdata.py
 
       - name: Downloads Table files
         if: ${{ inputs.Unpack_FlatData }}
         run: |
-          chmod +x update.sh
-          ./update.sh
+          chmod +x BA-Unpack/update.sh
+          ./BA-Unpack/update.sh
 
       - name: Unpack ExcelDB.db and Excel.zip
         if: ${{ inputs.Unpack_FlatData }}
         run: |
-          python unpack/unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData config.json ../BA-Text 10
+          python BA-Unpack/unpack/unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData config.json ../BA-Text 10
 
       - name: Committing FlatData
         if: ${{ inputs.Unpack_FlatData }}
         run: |
+          cd BA-Unpack
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
