@@ -135,19 +135,19 @@ jobs:
         run: |
           python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData config.json BA-Text 10
 
-      - name: Prepare FlatData (不提交)
+      - name: Prepare FlatData
         run: |
           cd ./Extracted/FlatData/
           zip -j "FlatData${BA_VERSION_NAME}.zip" *
           mv "FlatData${BA_VERSION_NAME}.zip" ../../BA-FlatData/
 
-      - name: Prepare Text files (不提交)
+      - name: Prepare Text files
         run: |
           cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} BA-Text
           cd BA-Text
-          zip -r "./日服${BA_VERSION_NAME}.zip" DBSchema ExcelTable TableCatalog.json MediaCatalog.json BundlePackingInfo-iOS.json BundlePackingInfo-Android.json
+          zip -r "./日服${BA_VERSION_NAME}.zip" DBSchema ExcelTable
 
-      - name: Prepare Assets files (不提交)
+      - name: Prepare Assets files
         run: |
           set -e
           TARGET_DIR="BA-Assets"
