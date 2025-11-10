@@ -104,9 +104,27 @@ jobs:
         run: |
           set -e
 
-          cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} BA-Assets/
-          mv "BA-Text/DBSchema" "BA-Assets/"
-          mv "BA-Text/ExcelTable" "BA-Assets/"
+          TARGET_DIR="BA-Assets"
+
+          FILES=("TableCatalog.json" "MediaCatalog.json" "BundlePackingInfo-iOS.json" "BundlePackingInfo-Android.json")
+
+          for file in "${FILES[@]}"; do
+            if [ -f "$TARGET_DIR/$file" ]; then
+              echo "删除已存在的文件: $TARGET_DIR/$file"
+              rm "$TARGET_DIR/$file"
+            fi
+          done
+
+          cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} "$TARGET_DIR$"
+          if [ -d "BA-Assets/DBSchema" ]; then
+            rm -rf "BA-Assets/DBSchema"
+          fi
+          mv "BA-Text/DBSchema" "BA-Assets/DBSchema"
+          if [ -d "BA-Assets/ExcelTable" ]; then
+            rm -rf "BA-Assets/ExcelTable"
+          fi
+          mv "BA-Text/ExcelTable" "BA-Assets/ExcelTable"
+
           cd BA-Assets
 
           git pull origin main
@@ -186,12 +204,13 @@ jobs:
 
       - name: Clone BA-Assets repository for media
         run: |
-          git clone https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git media-assets
+          git clone https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
 
       - name: Process and commit Media files
         shell: bash
         run: |
           set -e
+          cd BA-Assets
 
           git pull origin main
 
