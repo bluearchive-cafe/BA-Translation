@@ -402,78 +402,106 @@ jobs:
         run: |
           cd BA-Assets
           
-          # 提交 mp4 文件
-          echo "Committing mp4 files..."
-          find . -name "*.mp4" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: mp4 files - version ${{ needs.setup.outputs.version }}"
-          fi
-  
-          # 提交 jpg 文件
-          echo "Committing jpg files..."
-          find . -name "*.jpg" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: jpg files - version ${{ needs.setup.outputs.version }}"
-          fi        
-
-          # 提交 ogg 文件
-          echo "Committing ogg files..."
-          find . -name "*.ogg" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: ogg files - version ${{ needs.setup.outputs.version }}"
-          fi
+          BATCH_SIZE=800
+          MAX_RETRIES=3
           
-          # 提交 json 文件
-          echo "Committing json files..."
-          find . -name "*.json" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: json files - version ${{ needs.setup.outputs.version }}"
-          fi
+          push_with_retry() {
+            local retry_count=0
+            while [ $retry_count -lt $MAX_RETRIES ]; do
+              if git push origin; then
+                echo "Push successful"
+                return 0
+              else
+                ((retry_count++))
+                echo "Push failed, retrying in 5 seconds... ($retry_count/$MAX_RETRIES)"
+                sleep 5
+              fi
+            done
+            echo "Push failed after $MAX_RETRIES attempts"
+            return 1
+          }
           
-          # 提交 zip 文件
-          echo "Committing zip files..."
-          find . -name "*.zip" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: zip files - version ${{ needs.setup.outputs.version }}"
-          fi
-          
-          echo "Committing remaining files in batches..."
-          batch_num=1
-          find . -type f | grep -vE '\.(mp4|ogg|json|zip)$' | while read file; do
-            git add "$file"
-            # 每1000个文件提交一次
-            if [ $((batch_num % 1000)) -eq 0 ]; then
-              if ! git diff --staged --quiet; then
-                git commit -m "Update Assets: remaining files batch $((batch_num/1000)) - version ${{ needs.setup.outputs.version }}"
+          commit_batch() {
+            local file_type=$1
+            local pattern=$2
+            local commit_msg=$3
+            
+            echo "Processing $file_type files..."
+            local file_count=0
+            local batch_count=0
+            
+            while IFS= read -r -d '' file; do
+              git add "$file"
+              ((file_count++))
+              ((batch_count++))
+              
+              if [ $batch_count -ge $BATCH_SIZE ]; then
+                if ! git diff --staged --quiet; then
+                  git commit -m "$commit_msg (batch $((file_count/BATCH_SIZE)))"
+                  if ! push_with_retry; then
+                    echo "Failed to push $file_type batch"
+                    return 1
+                  fi
+                fi
+                batch_count=0
+              fi
+            done < <(find . -name "$pattern" -type f -print0)
+            
+            if [ $batch_count -gt 0 ] && ! git diff --staged --quiet; then
+              git commit -m "$commit_msg (final batch)"
+              if ! push_with_retry; then
+                echo "Failed to push final $file_type batch"
+                return 1
               fi
             fi
-            ((batch_num++))
+            
+            echo "Completed $file_type: $file_count files"
+            return 0
+          }
+          
+          file_types=("mp4" "jpg" "png" "ogg" "json" "zip")
+          
+          for file_type in "${file_types[@]}"; do
+            commit_batch "$file_type" "*.$file_type" "Update Assets: $file_type files - version ${{ needs.setup.outputs.version }}"
           done
           
-          if ! git diff --staged --quiet; then
+          echo "Processing remaining files..."
+          remaining_files=()
+          while IFS= read -r -d '' file; do
+            if [[ ! "$file" =~ \.(mp4|jpg|png|ogg|json|zip)$ ]]; then
+              remaining_files+=("$file")
+            fi
+          done < <(find . -type f -print0)
+          
+          batch_num=1
+          current_batch=()
+          
+          for file in "${remaining_files[@]}"; do
+            current_batch+=("$file")
+            git add "$file"
+            
+            if [ ${#current_batch[@]} -ge $BATCH_SIZE ]; then
+              if ! git diff --staged --quiet; then
+                git commit -m "Update Assets: remaining files batch $batch_num - version ${{ needs.setup.outputs.version }}"
+                if ! push_with_retry; then
+                  echo "Failed to push remaining files batch $batch_num"
+                  exit 1
+                fi
+                batch_num=$((batch_num + 1))
+              fi
+              current_batch=()
+            fi
+          done
+          
+          if [ ${#current_batch[@]} -gt 0 ] && ! git diff --staged --quiet; then
             git commit -m "Update Assets: final batch of remaining files - version ${{ needs.setup.outputs.version }}"
+            if ! push_with_retry; then
+              echo "Failed to push final batch of remaining files"
+              exit 1
+            fi
           fi
           
-          git push origin
-
-      - name: Trigger next workflow for Media and Bundle
-        if: needs.setup.outputs.trigger-type == 'repository_dispatch' && needs.Table.result == 'success'
-        run: |
-          curl -X POST \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.repository }}/dispatches \
-          -d '{"event_type": "run-deployment", "client_payload": {"run_media_bundle": true}}'
+          echo "All files committed successfully"
 
       - name: Cleanup
         run: |
