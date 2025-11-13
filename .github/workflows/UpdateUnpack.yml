@@ -113,10 +113,16 @@ jobs:
         run: |
           echo "BA_VERSION_NAME=${{ needs.setup.outputs.version }}" >> $GITHUB_ENV
 
-      - name: Clone repositories
+      - name: Clone BA-FlatData
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git
+
+      - name: Clone BA-Text
+        run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
+
+      - name: Clone BA-Assets
+        run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
 
       - name: Setup FlatData
@@ -243,7 +249,7 @@ jobs:
         run: |
           echo "BA_VERSION_NAME=${{ needs.setup.outputs.version }}" >> $GITHUB_ENV
 
-      - name: Clone Assets repository for media
+      - name: Clone Assets repository
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
 
@@ -318,10 +324,16 @@ jobs:
     needs: [Table, Media, Bundle]
     if: always() && (contains(needs.*.result, 'success') || contains(needs.*.result, 'skipped'))
     steps:
-      - name: Checkout target repositories
+      - name: Clone BA-FlatData
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git
+
+      - name: Clone BA-Text
+        run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
+
+      - name: Clone BA-Assets
+        run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
 
       - name: Download all artifacts
