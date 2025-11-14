@@ -115,7 +115,6 @@ jobs:
           ./update.sh JP Bundle 1 catalog-only
           python get_bundle_packs.py >> "$GITHUB_OUTPUT"
 
-
   bundle-group-1:
     runs-on: ubuntu-latest
     needs: [setup, bundle-setup]
@@ -164,7 +163,6 @@ jobs:
           ALL_PACKS="${{ needs.bundle-setup.outputs.bundle-packs }}"
           GROUP1_PACKS=$(echo "$ALL_PACKS" | cut -d'|' -f1)
           echo "Processing bundle group 1: $GROUP1_PACKS"
-          
           ./update.sh JP Bundle 8 "$GROUP1_PACKS"
 
       - name: Upload Bundle artifacts group 1
@@ -222,7 +220,6 @@ jobs:
           ALL_PACKS="${{ needs.bundle-setup.outputs.bundle-packs }}"
           GROUP2_PACKS=$(echo "$ALL_PACKS" | cut -d'|' -f2)
           echo "Processing bundle group 2: $GROUP2_PACKS"
-          
           ./update.sh JP Bundle 8 "$GROUP2_PACKS"
 
       - name: Upload Bundle artifacts group 2
@@ -280,7 +277,6 @@ jobs:
           ALL_PACKS="${{ needs.bundle-setup.outputs.bundle-packs }}"
           GROUP3_PACKS=$(echo "$ALL_PACKS" | cut -d'|' -f3)
           echo "Processing bundle group 3: $GROUP3_PACKS"
-          
           ./update.sh JP Bundle 8 "$GROUP3_PACKS"
 
       - name: Upload Bundle artifacts group 3
@@ -338,7 +334,6 @@ jobs:
           ALL_PACKS="${{ needs.bundle-setup.outputs.bundle-packs }}"
           GROUP4_PACKS=$(echo "$ALL_PACKS" | cut -d'|' -f4)
           echo "Processing bundle group 4: $GROUP4_PACKS"
-          
           ./update.sh JP Bundle 8 "$GROUP4_PACKS"
 
       - name: Upload Bundle artifacts group 4
@@ -554,11 +549,9 @@ jobs:
           while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" = "false" ]; do
             echo "Downloading artifacts (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
             
-            # 创建artifacts目录
             rm -rf artifacts
             mkdir -p artifacts
             
-            # 分别下载每个artifact，避免批量下载失败
             if [ "${{ needs.Table.result }}" = "success" ]; then
               echo "Downloading table artifacts..."
               if actions/download-artifact@v4 --name table-changes --path artifacts/table-changes; then
@@ -577,19 +570,15 @@ jobs:
               fi
             fi
             
-            # 下载bundle artifacts
-            for i in 1 2 3 4; do
-              if [ "${{ needs.bundle-group-$i.result }}" = "success" ]; then
-                echo "Downloading bundle artifacts group $i..."
-                if actions/download-artifact@v4 --name bundle-changes-group-$i --path artifacts/bundle-changes-group-$i; then
-                  echo "✓ Bundle group $i artifacts downloaded"
-                else
-                  echo "✗ Bundle group $i artifacts download failed"
-                fi
+            for group in 1 2 3 4; do
+              echo "Downloading bundle artifacts group $group..."
+              if actions/download-artifact@v4 --name bundle-changes-group-$group --path artifacts/bundle-changes-group-$group; then
+                echo "✓ Bundle group $group artifacts downloaded"
+              else
+                echo "✗ Bundle group $group artifacts download failed"
               fi
             done
             
-            # 检查是否至少有一个artifact下载成功
             if find artifacts -type f -name '*' | read; then
               SUCCESS=true
               echo "Artifacts download completed successfully"
@@ -613,7 +602,6 @@ jobs:
         run: |
           echo "Applying changes from artifacts..."
           
-          # 应用Table变更
           if [ -d "artifacts/table-changes" ]; then
             echo "Applying table changes..."
             cp -r artifacts/table-changes/BA-FlatData/* BA-FlatData/ 2>/dev/null || true
@@ -621,17 +609,15 @@ jobs:
             cp -r artifacts/table-changes/BA-Assets/* BA-Assets/ 2>/dev/null || true
           fi
           
-          # 应用Media变更
           if [ -d "artifacts/media-changes" ]; then
             echo "Applying media changes..."
             cp -r artifacts/media-changes/* BA-Assets/ 2>/dev/null || true
           fi
           
-          # 应用Bundle变更
-          for i in 1 2 3 4; do
-            if [ -d "artifacts/bundle-changes-group-$i" ]; then
-              echo "Applying bundle changes from group $i..."
-              cp -r artifacts/bundle-changes-group-$i/* BA-Assets/ 2>/dev/null || true
+          for group in 1 2 3 4; do
+            if [ -d "artifacts/bundle-changes-group-$group" ]; then
+              echo "Applying bundle changes from group $group..."
+              cp -r artifacts/bundle-changes-group-$group/* BA-Assets/ 2>/dev/null || true
             fi
           done
           
@@ -666,7 +652,6 @@ jobs:
         run: |
           cd BA-Assets
           
-          # 智能分批提交函数
           smart_commit() {
             local file_type=$1
             local pattern=$2
@@ -677,7 +662,6 @@ jobs:
             
             echo "Processing $file_type files..."
             
-            # 查找匹配的文件
             files=()
             while IFS= read -r -d '' file; do
               files+=("$file")
@@ -690,7 +674,6 @@ jobs:
             
             echo "Found ${#files[@]} $file_type files"
             
-            # 分批处理
             for ((i=0; i<${#files[@]}; i++)); do
               git add "${files[$i]}"
               ((file_count++))
@@ -719,7 +702,6 @@ jobs:
             echo "Completed $file_type files processing"
           }
           
-          # 按文件类型分批提交
           smart_commit "mp4" "*.mp4" "Update Assets: mp4 files - version ${{ needs.setup.outputs.version }}"
           smart_commit "jpg" "*.jpg" "Update Assets: jpg files - version ${{ needs.setup.outputs.version }}"
           smart_commit "png" "*.png" "Update Assets: png files - version ${{ needs.setup.outputs.version }}"
