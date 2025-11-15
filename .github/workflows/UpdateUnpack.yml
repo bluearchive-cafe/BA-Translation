@@ -603,6 +603,11 @@ jobs:
     needs: [Table, Media, bundle-group-1, bundle-group-2, bundle-group-3, bundle-group-4]
     if: always() && (contains(needs.*.result, 'success') || contains(needs.*.result, 'skipped'))
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
       - name: Clone BA-Assets repository
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
