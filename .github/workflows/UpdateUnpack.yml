@@ -538,86 +538,86 @@ jobs:
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
 
-      - name: Download artifacts with retry logic
-        id: download-artifacts
-        continue-on-error: true
-        run: |
-          MAX_RETRIES=3
-          RETRY_COUNT=0
-          SUCCESS=false
-          
-          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$SUCCESS" = "false" ]; do
-            echo "Downloading artifacts (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
-            
-            rm -rf artifacts
-            mkdir -p artifacts
-            
-            if [ "${{ needs.Table.result }}" = "success" ]; then
-              echo "Downloading table artifacts..."
-              if actions/download-artifact@v4 --name table-changes --path artifacts/table-changes; then
-                echo "✓ Table artifacts downloaded"
-              else
-                echo "✗ Table artifacts download failed"
-              fi
-            fi
-            
-            if [ "${{ needs.Media.result }}" = "success" ]; then
-              echo "Downloading media artifacts..."
-              if actions/download-artifact@v4 --name media-changes --path artifacts/media-changes; then
-                echo "✓ Media artifacts downloaded"
-              else
-                echo "✗ Media artifacts download failed"
-              fi
-            fi
-            
-            for group in 1 2 3 4; do
-              echo "Downloading bundle artifacts group $group..."
-              if actions/download-artifact@v4 --name bundle-changes-group-$group --path artifacts/bundle-changes-group-$group; then
-                echo "✓ Bundle group $group artifacts downloaded"
-              else
-                echo "✗ Bundle group $group artifacts download failed"
-              fi
-            done
-            
-            if find artifacts -type f -name '*' | read; then
-              SUCCESS=true
-              echo "Artifacts download completed successfully"
-            else
-              RETRY_COUNT=$((RETRY_COUNT+1))
-              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                echo "No artifacts downloaded, retrying in 10 seconds..."
-                sleep 10
-              fi
-            fi
-          done
-          
-          if [ "$SUCCESS" = "true" ]; then
-            echo "download-success=true" >> $GITHUB_OUTPUT
-          else
-            echo "download-success=false" >> $GITHUB_OUTPUT
-          fi
+      - name: Download Table artifacts
+        if: needs.Table.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: table-changes
+          path: artifacts/table-changes
+
+      - name: Download Media artifacts
+        if: needs.Media.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: media-changes
+          path: artifacts/media-changes
+
+      - name: Download Bundle artifacts group 1
+        if: needs.bundle-group-1.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: bundle-changes-group-1
+          path: artifacts/bundle-changes-group-1
+
+      - name: Download Bundle artifacts group 2
+        if: needs.bundle-group-2.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: bundle-changes-group-2
+          path: artifacts/bundle-changes-group-2
+
+      - name: Download Bundle artifacts group 3
+        if: needs.bundle-group-3.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: bundle-changes-group-3
+          path: artifacts/bundle-changes-group-3
+
+      - name: Download Bundle artifacts group 4
+        if: needs.bundle-group-4.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: bundle-changes-group-4
+          path: artifacts/bundle-changes-group-4
 
       - name: Apply changes from artifacts
-        if: steps.download-artifacts.outputs.download-success == 'true'
         run: |
           echo "Applying changes from artifacts..."
           
-          if [ -d "artifacts/table-changes" ]; then
+          # 创建必要的目录结构
+          mkdir -p artifacts/table-changes artifacts/media-changes \
+                   artifacts/bundle-changes-group-1 artifacts/bundle-changes-group-2 \
+                   artifacts/bundle-changes-group-3 artifacts/bundle-changes-group-4
+          
+          if [ -d "artifacts/table-changes" ] && [ "$(ls -A artifacts/table-changes 2>/dev/null)" ]; then
             echo "Applying table changes..."
-            cp -r artifacts/table-changes/BA-FlatData/* BA-FlatData/ 2>/dev/null || true
-            cp -r artifacts/table-changes/BA-Text/* BA-Text/ 2>/dev/null || true
-            cp -r artifacts/table-changes/BA-Assets/* BA-Assets/ 2>/dev/null || true
+            # 使用rsync来更安全地复制文件
+            if [ -d "artifacts/table-changes/BA-FlatData" ]; then
+              rsync -av artifacts/table-changes/BA-FlatData/ BA-FlatData/ || true
+            fi
+            if [ -d "artifacts/table-changes/BA-Text" ]; then
+              rsync -av artifacts/table-changes/BA-Text/ BA-Text/ || true
+            fi
+            if [ -d "artifacts/table-changes/BA-Assets" ]; then
+              rsync -av artifacts/table-changes/BA-Assets/ BA-Assets/ || true
+            fi
+          else
+            echo "No table changes to apply"
           fi
           
-          if [ -d "artifacts/media-changes" ]; then
+          if [ -d "artifacts/media-changes" ] && [ "$(ls -A artifacts/media-changes 2>/dev/null)" ]; then
             echo "Applying media changes..."
-            cp -r artifacts/media-changes/* BA-Assets/ 2>/dev/null || true
+            rsync -av artifacts/media-changes/ BA-Assets/ || true
+          else
+            echo "No media changes to apply"
           fi
           
           for group in 1 2 3 4; do
-            if [ -d "artifacts/bundle-changes-group-$group" ]; then
+            if [ -d "artifacts/bundle-changes-group-$group" ] && [ "$(ls -A artifacts/bundle-changes-group-$group 2>/dev/null)" ]; then
               echo "Applying bundle changes from group $group..."
-              cp -r artifacts/bundle-changes-group-$group/* BA-Assets/ 2>/dev/null || true
+              rsync -av artifacts/bundle-changes-group-$group/ BA-Assets/ || true
+            else
+              echo "No bundle changes from group $group to apply"
             fi
           done
           
