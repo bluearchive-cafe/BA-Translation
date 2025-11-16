@@ -1,6 +1,8 @@
 name: Update Unpack Bundle
 
 on:
+  workflow_dispatch:
+    inputs:
   repository_dispatch:
     types: [run-deployment-bundle]
 
