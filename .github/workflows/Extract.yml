@@ -1,4 +1,4 @@
-name: Extract new text
+name: Tools-Extract new text
 
 on:
   workflow_dispatch:
@@ -53,7 +53,6 @@ jobs:
           echo "Current info.json content:"
           cat info.json
           echo "Running version.sh on current info.json:"
-          bash version.sh info.json
           bash version.sh info.json >> "$GITHUB_OUTPUT"
 
       - name: Find last meaningful change in info.json

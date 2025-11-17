@@ -1,4 +1,4 @@
-name: Translation
+name: Tools-Translation text
 
 on:
   workflow_dispatch:

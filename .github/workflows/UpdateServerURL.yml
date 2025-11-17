@@ -1,4 +1,4 @@
-name: Update Game Server URL
+name: Unpack-Update Game Server URL
 on:
   schedule:
     - cron: "0 * * * *"

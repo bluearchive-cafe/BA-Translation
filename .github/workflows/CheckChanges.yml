@@ -1,0 +1,110 @@
+name: Tools-Check Repository Changes
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      skip_processing: ${{ steps.check_skip.outputs.skip_processing }}
+      has_changes: ${{ steps.check_changes.outputs.has_changes }}
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: beichen23333/BA-Text-Translation
+          token: ${{ secrets.APK_SRC_REPO }}
+          fetch-depth: 0
+
+      - name: Check latest commit for skip tag
+        id: check_skip
+        run: |
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          echo "最新提交信息: $COMMIT_MESSAGE"
+          
+          if echo "$COMMIT_MESSAGE" | grep -q "\[skip\]"; then
+            echo "skip_processing=true" >> $GITHUB_OUTPUT
+            echo "检测到 [skip] 标记，跳过处理"
+          else
+            echo "skip_processing=false" >> $GITHUB_OUTPUT
+            echo "未发现 [skip] 标记"
+          fi
+
+      - name: Check target files changes
+        id: check_changes
+        run: |
+          if [ -f "日服备份.zip" ] || [ -d "DBSchema" ] || [ -d "ExcelTable" ]; then
+            echo "目标文件存在"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "目标文件不存在"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+  process-repository:
+    runs-on: ubuntu-latest
+    needs: check-changes
+    if: needs.check-changes.outputs.skip_processing != 'true' && needs.check-changes.outputs.has_changes == 'true'
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: beichen23333/BA-Text-Translation
+          token: ${{ secrets.APK_SRC_REPO }}
+          fetch-depth: 0
+
+      - name: get SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
+      - name: Clone repositories
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Tools.git BA-Tools
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
+
+      - name: Move contents to current directory
+        run: |
+          mv BA-Tools/* .
+          rm -rf BA-Tools
+
+      - name: Get new version
+        id: new_ver
+        run: |
+          echo "Current info.json content:"
+          cat info.json
+          echo "Running version.sh on current info.json:"
+          bash version.sh info.json >> "$GITHUB_OUTPUT"
+
+      - name: Run update
+        run: |
+          git clone --depth 1 git@github.com:asfu222/beicheng.git beicheng
+
+          python clean.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" config.json "临时.zip"
+          python update.py "临时.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
+          python back.py config.json "BA-Text-Translation"
+          python re_extract.py "BA-Text-Translation" "BA-Text-Translation/日服备份.zip" config.json 10
+          python format.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
+
+      - name: Commit files Translation
+        run: |
+          cd BA-Text-Translation
+          git add .
+
+          git commit -m "[skip] auto sync $(date +%F-%T)"
+          git push origin
+          cd
+
+      - name: Commit files beicheng
+        run: |
+          cd beicheng
+          git add .
+
+          git commit -m "auto sync $(date +%F-%T)"
+          git push origin
+          cd

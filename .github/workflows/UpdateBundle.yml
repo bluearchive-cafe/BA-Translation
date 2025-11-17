@@ -1,4 +1,4 @@
-name: Update Unpack Bundle
+name: Unpack-Update Bundle
 
 on:
   workflow_dispatch:
