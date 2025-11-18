@@ -68,13 +68,17 @@ jobs:
           VERSION="${{ steps.get-versions.outputs.BA_VERSION_NAME }}"
           echo "当前版本: $VERSION"
           
-          if curl -s -I "https://raw.githubusercontent.com/beichen23333/BA-Text/main/日服${VERSION}.zip" | grep -q "200 OK"; then
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-check
+          
+          if [ -f "ba-text-check/日服${VERSION}.zip" ]; then
             echo "发现版本 $VERSION 的文件，跳过执行"
             echo "should-run=false" >> $GITHUB_OUTPUT
           else
             echo "未找到版本 $VERSION 的文件，继续执行"
             echo "should-run=true" >> $GITHUB_OUTPUT
           fi
+          
+          rm -rf ba-text-check
 
   setup:
     runs-on: ubuntu-latest
