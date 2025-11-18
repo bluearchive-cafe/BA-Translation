@@ -49,14 +49,13 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.skip_processing != 'true' && needs.check-changes.outputs.has_changes == 'true'
     steps:
-      - name: Checkout target repository
+
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          repository: beichen23333/BA-Text-Translation
-          token: ${{ secrets.APK_SRC_REPO }}
           fetch-depth: 1
 
-      - name: get SSH key
+      - name: Get SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
@@ -84,6 +83,7 @@ jobs:
       - name: Run update
         run: |
           git clone --depth 1 git@github.com:asfu222/beicheng.git beicheng
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text-Translation.git BA-Text-Translation
 
           python clean.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" config.json "临时.zip"
           python update.py "临时.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
