@@ -16,12 +16,8 @@ on:
         - alphanum
         - simple
         - full
-      excluded_keys:
-        description: 'Excluded keys file (base64 encoded)'
-        required: false
-        default: ''
       iteration:
-        description: 'Iteration number (auto-increment)'
+        description: 'Iteration number'
         required: false
         default: '1'
 
@@ -29,42 +25,40 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
-      timestamp: ${{ steps.timestamp.outputs.time }}
-      run_id: ${{ steps.run_id.outputs.id }}
-      iteration: ${{ steps.iteration.outputs.num }}
+      run_id: ${{ steps.setup.outputs.run_id }}
+      iteration: ${{ steps.setup.outputs.iteration }}
     steps:
       - uses: actions/checkout@v4
       - name: Clone repository
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git
-      - name: Move contents to current directory
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git || true
+      - name: Move contents if cloned
+        if: success()
         run: |
-          mv BA-Unpack/* .
-          rm -rf BA-Unpack
+          if [ -d "BA-Unpack" ]; then
+            mv BA-Unpack/* .
+            rm -rf BA-Unpack
+          fi
       - name: Download ExcelDB.db
         run: |
-          wget -q https://prod-clientpatch.bluearchiveyostar.com/r86_vm4arsjw95mxfrp4m01q_2/TableBundles/ExcelDB.db -O ExcelDB.db
+          wget -q https://prod-clientpatch.bluearchiveyostar.com/r86_vm4arsjw95mxfrp4m01q_2/TableBundles/ExcelDB.db -O ExcelDB.db || true
       - name: Create directories
         run: |
-          mkdir -p progress excluded_keys
-      - name: Decode excluded keys if provided
-        if: ${{ github.event.inputs.excluded_keys != '' }}
+          mkdir -p progress
+      - name: Setup run info
+        id: setup
         run: |
-          echo "${{ github.event.inputs.excluded_keys }}" | base64 -d > excluded_keys/previous.txt
-          echo "Loaded $(wc -l < excluded_keys/previous.txt) excluded keys"
-      - name: Generate IDs
-        id: timestamp
-        run: |
-          echo "time=$(date +%s)" >> $GITHUB_OUTPUT
-          echo "id=run-${{ github.run_id }}-$(date +%s)" >> $GITHUB_OUTPUT
-          echo "num=${{ github.event.inputs.iteration }}" >> $GITHUB_OUTPUT
+          echo "run_id=run-${{ github.run_id }}-$(date +%s)" >> $GITHUB_OUTPUT
+          echo "iteration=${{ github.event.inputs.iteration }}" >> $GITHUB_OUTPUT
       - name: Upload workspace
         uses: actions/upload-artifact@v4
         with:
-          name: workspace-${{ steps.timestamp.outputs.id }}
+          name: workspace-${{ steps.setup.outputs.run_id }}
           path: |
-            .
-          retention-days: 7
+            ExcelDB.db
+            lib/
+            *.py
+          retention-days: 3
 
   bruteforce:
     needs: setup
@@ -72,7 +66,9 @@ jobs:
     timeout-minutes: 300  # 5小时超时
     strategy:
       matrix:
-        worker: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        worker: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 改为10个进程
+      fail-fast: false
+      max-parallel: 10
     steps:
       - name: Download workspace
         uses: actions/download-artifact@v4
@@ -87,140 +83,242 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install xxhash pycryptodome
-      - name: Run bruteforce with timeout handling
+      - name: Create simple bruteforce script
         run: |
-          # 设置5小时超时（295分钟，留5分钟保存）
-          timeout 295m python bruteforce_restartable.py \
-            --worker ${{ matrix.worker }} \
-            --max-length ${{ github.event.inputs.max_length }} \
-            --charset ${{ github.event.inputs.charset_type }} \
-            --run-id ${{ needs.setup.outputs.run_id }} \
-            --iteration ${{ needs.setup.outputs.iteration }} || \
-          (echo "Worker ${{ matrix.worker }} timed out" && exit 124)
+          cat > bruteforce_simple.py << 'EOF'
+          from lib.encryption import xor_with_key
+          import os
+          import sys
+          import time
+          import string
+          import itertools
+          from multiprocessing import Pool, cpu_count
+          import logging
+
+          # 设置日志
+          def setup_logger(worker_id):
+              logger = logging.getLogger(f'worker_{worker_id}')
+              logger.setLevel(logging.INFO)
+              
+              if not logger.handlers:
+                  # 文件处理器
+                  fh = logging.FileHandler(f'worker_{worker_id}.log')
+                  fh.setLevel(logging.INFO)
+                  
+                  # 控制台处理器
+                  ch = logging.StreamHandler()
+                  ch.setLevel(logging.INFO)
+                  
+                  formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+                  fh.setFormatter(formatter)
+                  ch.setFormatter(formatter)
+                  
+                  logger.addHandler(fh)
+                  logger.addHandler(ch)
+              
+              return logger
+
+          def is_valid_db(data):
+              return data.startswith(b'SQLite format 3\\x00')
+
+          def test_single_key(key):
+              try:
+                  with open('ExcelDB.db', 'rb') as f:
+                      header = f.read(100)
+                  decrypted = xor_with_key(key, header)
+                  if is_valid_db(decrypted):
+                      return True, key
+                  return False, None
+              except Exception as e:
+                  return False, None
+
+          def test_key_batch(keys):
+              """测试一批密钥"""
+              results = []
+              for key in keys:
+                  valid, found_key = test_single_key(key)
+                  if valid:
+                      return [('FOUND', key)]
+                  results.append(('TESTED', key))
+              return results
+
+          def generate_keys_for_worker(worker_id, total_workers=10):
+              """为特定worker生成密钥"""
+              # 字符集
+              charset = string.ascii_letters + string.digits
+              
+              # 测试不同长度
+              for length in range(1, 9):  # 1-8长度
+                  total_keys = len(charset) ** length
+                  keys_per_worker = total_keys // total_workers
+                  start_idx = worker_id * keys_per_worker
+                  end_idx = start_idx + keys_per_worker
+                  
+                  if worker_id == total_workers - 1:  # 最后一个worker处理剩余部分
+                      end_idx = total_keys
+                  
+                  logger.info(f"Testing length {length}: keys {start_idx:,} to {end_idx:,} of {total_keys:,}")
+                  
+                  count = 0
+                  batch = []
+                  batch_size = 1000
+                  
+                  for key_tuple in itertools.islice(itertools.product(charset, repeat=length), start_idx, end_idx):
+                      key = ''.join(key_tuple)
+                      batch.append(key)
+                      
+                      if len(batch) >= batch_size:
+                          count += len(batch)
+                          
+                          # 测试批次
+                          with Pool(min(cpu_count(), 4)) as pool:
+                              batch_results = pool.map(test_single_key, batch)
+                          
+                          # 检查结果
+                          for valid, found_key in batch_results:
+                              if valid:
+                                  return found_key
+                          
+                          batch.clear()
+                          
+                          if count % 10000 == 0:
+                              logger.info(f"Tested {count:,} keys for length {length}")
+                  
+                  # 测试剩余批次
+                  if batch:
+                      count += len(batch)
+                      with Pool(min(cpu_count(), 4)) as pool:
+                          batch_results = pool.map(test_single_key, batch)
+                      
+                      for valid, found_key in batch_results:
+                          if valid:
+                              return found_key
+              
+              return None
+
+          if __name__ == "__main__":
+              if len(sys.argv) > 1:
+                  worker_id = int(sys.argv[1])
+              else:
+                  worker_id = 0
+              
+              logger = setup_logger(worker_id)
+              logger.info(f"🚀 Starting worker {worker_id}")
+              
+              start_time = time.time()
+              
+              try:
+                  result = generate_keys_for_worker(worker_id)
+                  
+                  if result:
+                      logger.info(f"🎯 KEY FOUND: {result}")
+                      print(f"\\033[93m🚨 Worker {worker_id} FOUND KEY: {result}\\033[0m")
+                      
+                      with open(f'key_{worker_id}.txt', 'w') as f:
+                          f.write(result)
+                  else:
+                      elapsed = time.time() - start_time
+                      logger.info(f"❌ No key found after {elapsed:.1f}s")
+                      
+              except Exception as e:
+                  logger.error(f"💥 Worker {worker_id} failed: {e}")
+                  # 保存错误状态
+                  with open(f'worker_{worker_id}_error.txt', 'w') as f:
+                      f.write(str(e))
+          EOF
+      - name: Run bruteforce
+        run: |
+          # 设置5小时超时（295分钟）
+          timeout 295m python bruteforce_simple.py ${{ matrix.worker }} || exit_code=$?
+          
+          if [ $? -eq 124 ]; then
+            echo "Worker ${{ matrix.worker }} timed out after 5 hours"
+            # 保存超时状态
+            touch progress/timeout_${{ matrix.worker }}.txt
+            echo "$(date)" > progress/timeout_${{ matrix.worker }}.txt
+          fi
         continue-on-error: true
-        id: bruteforce
-      - name: Save timeout results
-        if: steps.bruteforce.outcome == 'failure' || steps.bruteforce.outcome == 'cancelled'
-        run: |
-          echo "Saving timeout state for worker ${{ matrix.worker }}"
-          # 确保进度文件存在
-          touch progress/timeout_${{ matrix.worker }}.txt
-          echo "Timeout at $(date)" > progress/timeout_${{ matrix.worker }}.txt
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: results-${{ needs.setup.outputs.run_id }}-worker-${{ matrix.worker }}
+          name: results-worker-${{ matrix.worker }}-${{ needs.setup.outputs.run_id }}
           path: |
-            key_*.txt
+            key_${{ matrix.worker }}.txt
             worker_${{ matrix.worker }}.log
-            progress/
-            excluded_keys/
-          retention-days: 7
+            worker_${{ matrix.worker }}_error.txt
+            progress/timeout_${{ matrix.worker }}.txt
+          retention-days: 3
+        if: always()
 
-  analyze-and-restart:
+  results:
     needs: [setup, bruteforce]
     runs-on: ubuntu-latest
     if: always()
-    outputs:
-      should_restart: ${{ steps.analyze.outputs.restart }}
-      excluded_keys_b64: ${{ steps.analyze.outputs.excluded_b64 }}
-      next_iteration: ${{ steps.analyze.outputs.next_iteration }}
     steps:
       - name: Download all results
         uses: actions/download-artifact@v4
         with:
           path: results
-          pattern: results-${{ needs.setup.outputs.run_id }}-*
+          pattern: results-*-${{ needs.setup.outputs.run_id }}
           merge-multiple: true
-      - name: Analyze results and prepare restart
-        id: analyze
+      - name: Check for found keys
+        id: check-keys
         run: |
-          echo "=== Analysis Results ==="
+          echo "=== Bruteforce Results ==="
+          echo "Run ID: ${{ needs.setup.outputs.run_id }}"
+          echo "Iteration: ${{ needs.setup.outputs.iteration }}"
+          echo ""
           
-          # 检查是否找到密钥
-          if find results -name "key_*.txt" | grep -q .; then
-            echo "🎉 KEY FOUND - STOPPING WORKFLOW"
-            find results -name "key_*.txt" -exec echo "Key: {}" \; -exec cat {} \;
-            echo "::warning::🔑 Valid key found! Workflow completed."
-            echo "restart=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # 检查超时的worker
-          timeout_workers=()
-          for i in {0..19}; do
-            if [ -f "results/progress/timeout_$i.txt" ]; then
-              timeout_workers+=($i)
-              echo "Worker $i: TIMEOUT"
-            elif [ -f "results/key_$i.txt" ]; then
-              echo "Worker $i: COMPLETED (no key)"
-            elif [ -f "results/worker_$i.log" ]; then
-              echo "Worker $i: COMPLETED (no key)"
-            else
-              echo "Worker $i: UNKNOWN STATUS"
+          found_keys=0
+          for i in {0..9}; do
+            if [ -f "results/key_$i.txt" ]; then
+              key=$(cat "results/key_$i.txt")
+              echo "🎉 Worker $i: KEY FOUND - $key"
+              found_keys=$((found_keys + 1))
             fi
           done
           
-          # 收集所有测试过的错误密钥
-          echo "Collecting tested keys from logs..."
-          python3 << 'EOF'
-          import os
-          import re
-          
-          tested_keys = set()
-          
-          # 从日志文件中提取测试过的密钥
-          for i in range(20):
-              log_file = f"results/worker_{i}.log"
-              if os.path.exists(log_file):
-                  with open(log_file, 'r', errors='ignore') as f:
-                      content = f.read()
-                  # 提取类似 "Testing key: abc123" 的模式
-                  keys = re.findall(r'Testing key: ([^\s]+)', content)
-                  tested_keys.update(keys)
-          
-          # 保存到文件
-          with open('tested_keys.txt', 'w') as f:
-              for key in tested_keys:
-                  f.write(key + '\n')
-          
-          print(f"Collected {len(tested_keys)} tested keys")
-          EOF
-          
-          # 编码为base64用于下一次运行
-          if [ -f "tested_keys.txt" ] && [ -s "tested_keys.txt" ]; then
-            base64_encoded=$(base64 -w 0 tested_keys.txt)
-            echo "excluded_b64=$base64_encoded" >> $GITHUB_OUTPUT
-            echo "Collected $(wc -l < tested_keys.txt) keys to exclude"
+          if [ $found_keys -gt 0 ]; then
+            echo "::warning::🔑 $found_keys valid key(s) found!"
+            echo "found=true" >> $GITHUB_OUTPUT
           else
-            # 如果没有新密钥，使用传入的excluded_keys
-            if [ -f "results/excluded_keys/previous.txt" ]; then
-              base64_encoded=$(base64 -w 0 results/excluded_keys/previous.txt)
-              echo "excluded_b64=$base64_encoded" >> $GITHUB_OUTPUT
-            else
-              echo "excluded_b64=" >> $GITHUB_OUTPUT
-            fi
+            echo "❌ No keys found in this run"
+            echo "found=false" >> $GITHUB_OUTPUT
           fi
           
-          # 决定是否重启
-          if [ ${#timeout_workers[@]} -gt 0 ]; then
-            echo "RESTARTING: ${#timeout_workers[@]} workers timed out"
+          echo ""
+          echo "=== Worker Status ==="
+          timeout_count=0
+          for i in {0..9}; do
+            if [ -f "results/key_$i.txt" ]; then
+              echo "✅ Worker $i: FOUND KEY"
+            elif [ -f "results/progress/timeout_$i.txt" ]; then
+              echo "⏰ Worker $i: TIMEOUT"
+              timeout_count=$((timeout_count + 1))
+            elif [ -f "results/worker_$i.log" ]; then
+              echo "➖ Worker $i: COMPLETED"
+            else
+              echo "❓ Worker $i: UNKNOWN"
+            fi
+          done
+          
+          echo ""
+          echo "Timeout workers: $timeout_count/10"
+          
+          if [ $timeout_count -gt 0 ] && [ $found_keys -eq 0 ]; then
             echo "restart=true" >> $GITHUB_OUTPUT
             next_iteration=$(( ${{ needs.setup.outputs.iteration }} + 1 ))
             echo "next_iteration=$next_iteration" >> $GITHUB_OUTPUT
+            echo "Some workers timed out, will restart..."
           else
-            echo "NO RESTART: All workers completed"
             echo "restart=false" >> $GITHUB_OUTPUT
           fi
       - name: Restart workflow if needed
-        if: steps.analyze.outputs.restart == 'true'
+        if: steps.check-keys.outputs.restart == 'true'
         uses: actions/github-script@v6
         with:
           script: |
-            const { excluded_b64, next_iteration } = process.env;
-            
-            // 等待一段时间确保所有artifact上传完成
-            await new Promise(resolve => setTimeout(resolve, 30000));
+            await new Promise(resolve => setTimeout(resolve, 10000)); // 等待10秒
             
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
@@ -230,13 +328,8 @@ jobs:
               inputs: {
                 max_length: '${{ github.event.inputs.max_length }}',
                 charset_type: '${{ github.event.inputs.charset_type }}',
-                excluded_keys: excluded_b64,
-                iteration: next_iteration
+                iteration: '${{ steps.check-keys.outputs.next_iteration }}'
               }
             });
             
-            console.log(`Restarted workflow (iteration ${next_iteration})`);
-            console.log(`Excluded keys: ${excluded_b64 ? excluded_b64.length + ' chars' : 'none'}`);
-        env:
-          excluded_b64: ${{ steps.analyze.outputs.excluded_keys_b64 }}
-          next_iteration: ${{ steps.analyze.outputs.next_iteration }}
+            console.log(`Restarting workflow (iteration ${{ steps.check-keys.outputs.next_iteration }})`);
