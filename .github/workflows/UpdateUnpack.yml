@@ -221,6 +221,10 @@ jobs:
           chmod +x update.sh
           ./update.sh JP Table
 
+      - name: Unpack ExcelDB.db and Excel.zip
+        run: |
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData config.json BA-Text 10
+
       - name: Prepare FlatData
         run: |
           cd ./Extracted/FlatData/
@@ -231,6 +235,9 @@ jobs:
       - name: Prepare Text files
         run: |
           cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} BA-Text
+          cd BA-Text
+          zip -r "./日服${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          cd
 
       - name: Prepare Assets files
         run: |
@@ -244,6 +251,14 @@ jobs:
           done
 
           cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} "BA-Assets"
+          if [ -d "BA-Assets/DBSchema" ]; then
+            rm -rf "BA-Assets/DBSchema"
+          fi
+          mv "BA-Text/DBSchema" "BA-Assets/DBSchema"
+          if [ -d "BA-Assets/ExcelTable" ]; then
+            rm -rf "BA-Assets/ExcelTable"
+          fi
+          mv "BA-Text/ExcelTable" "BA-Assets/ExcelTable"
 
           cd BA-Assets
 
