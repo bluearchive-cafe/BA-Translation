@@ -235,7 +235,6 @@ jobs:
           path: |
             BA-FlatData/
             BA-Text/
-            BA-Assets/
           retention-days: 1
 
   media:
