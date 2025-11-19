@@ -233,8 +233,9 @@ jobs:
         with:
           name: table-changes
           path: |
-            BA-Text/
             BA-FlatData/
+            BA-Text/
+            BA-Assets/
           retention-days: 1
 
   media:
@@ -315,6 +316,14 @@ jobs:
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
 
+      - name: Clone BA-Text repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
+
+      - name: Clone BA-FlatData repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git
+
       - name: Download Table artifacts
         if: needs.table.result == 'success'
         uses: actions/download-artifact@v4
@@ -333,23 +342,30 @@ jobs:
           retry-count: 5
           retry-delay: 30000
 
-      - name: Extract and merge all artifacts to BA-Assets
+      - name: Extract and merge all artifacts
         run: |
-          echo "解压并合并所有内容到BA-Assets..."
+          echo "解压并合并所有内容到对应仓库..."
           
-          if [ -d "artifacts/table-changes" ] && [ "$(ls -A artifacts/table-changes 2>/dev/null)" ]; then
-            echo "合并table changes..."
-            if [ -d "artifacts/table-changes/BA-Assets" ]; then
-              rsync -av artifacts/table-changes/BA-Assets/ BA-Assets/ || true
-            fi
+          
+          # 处理 BA-FlatData
+          if [ -d "artifacts/table-changes/BA-FlatData" ]; then
+            echo "合并 BA-FlatData 内容..."
+            rsync -av artifacts/table-changes/BA-FlatData/ BA-FlatData/ || true
           fi
           
+          # 处理 BA-Assets
+          if [ -d "artifacts/table-changes/BA-Assets" ]; then
+            echo "合并 BA-Assets 内容..."
+            rsync -av artifacts/table-changes/BA-Assets/ BA-Assets/ || true
+          fi
+          
+          # 处理 Media 内容
           if [ -f "artifacts/media-zip/media_extracted_content.zip" ]; then
-            echo "解压Media ZIP包..."
+            echo "解压 Media ZIP 包到 BA-Assets..."
             unzip -q -o artifacts/media-zip/media_extracted_content.zip -d BA-Assets/
-            echo "Media内容已合并到BA-Assets"
+            echo "Media 内容已合并到 BA-Assets"
           elif [ -f "artifacts/media-zip/empty_media.zip" ]; then
-            echo "没有Media内容可合并"
+            echo "没有 Media 内容可合并"
           fi
           
           echo "所有内容合并完成"
@@ -364,6 +380,23 @@ jobs:
           echo "BA_VERSION_NAME=$BA_VERSION_NAME"
           echo "当前版本: $BA_VERSION_NAME"
 
+
+      - name: Commit to BA-FlatData
+        if: needs.table.result == 'success'
+        run: |
+          echo "提交到 BA-FlatData，版本: $BA_VERSION_NAME"
+          cd BA-FlatData
+          
+          git add .
+          if ! git diff --staged --quiet; then
+            git commit -m "Update FlatData - version $BA_VERSION_NAME"
+            git push origin
+            echo "BA-FlatData 提交完成"
+          else
+            echo "BA-FlatData 没有变更需要提交"
+          fi
+          cd ..
+
       - name: Smart commit to BA-Assets
         if: needs.table.result == 'success' || needs.media.result == 'success'
         run: |
@@ -375,7 +408,7 @@ jobs:
             git add "$file"
           done
           if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: mp4 files - version ${{ needs.setup.outputs.version }}"
+            git commit -m "Update Assets: mp4 files - version $BA_VERSION_NAME"
           fi
   
           echo "Committing jpg files..."
@@ -383,7 +416,7 @@ jobs:
             git add "$file"
           done
           if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: jpg files - version ${{ needs.setup.outputs.version }}"
+            git commit -m "Update Assets: jpg files - version $BA_VERSION_NAME"
           fi        
 
           echo "Committing ogg files..."
@@ -391,7 +424,7 @@ jobs:
             git add "$file"
           done
           if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: ogg files - version ${{ needs.setup.outputs.version }}"
+            git commit -m "Update Assets: ogg files - version $BA_VERSION_NAME"
           fi
           
           echo "Committing json files..."
@@ -399,7 +432,7 @@ jobs:
             git add "$file"
           done
           if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: json files - version ${{ needs.setup.outputs.version }}"
+            git commit -m "Update Assets: json files - version $BA_VERSION_NAME"
           fi
           
           echo "Committing zip files..."
@@ -407,7 +440,7 @@ jobs:
             git add "$file"
           done
           if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: zip files - version ${{ needs.setup.outputs.version }}"
+            git commit -m "Update Assets: zip files - version $BA_VERSION_NAME"
           fi
           
           echo "Committing remaining files in batches..."
@@ -416,24 +449,18 @@ jobs:
             git add "$file"
             if [ $((batch_num % 1000)) -eq 0 ]; then
               if ! git diff --staged --quiet; then
-                git commit -m "Update Assets: remaining files batch $((batch_num/1000)) - version ${{ needs.setup.outputs.version }}"
+                git commit -m "Update Assets: remaining files batch $((batch_num/1000)) - version $BA_VERSION_NAME"
               fi
             fi
             ((batch_num++))
           done
           
           if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: final batch of remaining files - version ${{ needs.setup.outputs.version }}"
+            git commit -m "Update Assets: final batch of remaining files - version $BA_VERSION_NAME"
           fi
           
           git push origin
-
-          cd
-          cd BA-FlatData
-          git add .
-
-          git commit -m "提交文件"
-          git push origin
+          echo "BA-Assets 提交完成"
 
       - name: Cleanup
         run: |
