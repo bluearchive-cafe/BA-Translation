@@ -228,6 +228,45 @@ jobs:
           mv "FlatData${BA_VERSION_NAME}.zip" ../../BA-FlatData/
           cd
 
+      - name: Prepare Text files
+        run: |
+          cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} BA-Text
+
+      - name: Prepare Assets files
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
+          FILES=("TableCatalog.json" "MediaCatalog.json" "BundlePackingInfo-iOS.json" "BundlePackingInfo-Android.json")
+
+          for file in "${FILES[@]}"; do
+            if [ -f "BA-Assets/$file" ]; then
+              rm "BA-Assets/$file"
+            fi
+          done
+
+          cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} "BA-Assets"
+
+          cd BA-Assets
+
+          for item in DBSchema ExcelTable TableCatalog.json MediaCatalog.json BundlePackingInfo-iOS.json BundlePackingInfo-Android.json; do
+              if [ -e "$item" ]; then
+                  if [ -d "$item" ]; then
+                      find "$item" -type f | while read -r file; do
+                          file_size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
+                          if [ "$file_size" -gt 104857600 ]; then
+                              gzip -c "$file" > "$file.gz"
+                              rm "$file"
+                          fi
+                      done
+                  else
+                      file_size=$(stat -c%s "$item" 2>/dev/null || stat -f%z "$item")
+                      if [ "$file_size" -gt 104857600 ]; then
+                          gzip -c "$item" > "$item.gz"
+                          rm "$item"
+                      fi
+                  fi
+              fi
+          done
+
       - name: Upload Table artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -346,6 +385,11 @@ jobs:
         run: |
           echo "解压并合并所有内容到对应仓库..."
           
+          # 处理 BA-Text
+          if [ -d "artifacts/table-changes/BA-Text" ]; then
+            echo "合并 BA-Text 内容..."
+            rsync -av artifacts/table-changes/BA-Text/ BA-Text/ || true
+          fi
           
           # 处理 BA-FlatData
           if [ -d "artifacts/table-changes/BA-FlatData" ]; then
@@ -380,6 +424,21 @@ jobs:
           echo "BA_VERSION_NAME=$BA_VERSION_NAME"
           echo "当前版本: $BA_VERSION_NAME"
 
+      - name: Commit to BA-Text
+        if: needs.table.result == 'success'
+        run: |
+          echo "提交到 BA-Text，版本: $BA_VERSION_NAME"
+          cd BA-Text
+          
+          git add .
+          if ! git diff --staged --quiet; then
+            git commit -m "Update Text files - version $BA_VERSION_NAME"
+            git push origin
+            echo "BA-Text 提交完成"
+          else
+            echo "BA-Text 没有变更需要提交"
+          fi
+          cd ..
 
       - name: Commit to BA-FlatData
         if: needs.table.result == 'success'
