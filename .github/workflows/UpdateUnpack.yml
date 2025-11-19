@@ -227,13 +227,17 @@ jobs:
           zip -j "FlatData${BA_VERSION_NAME}.zip" *
           mv "FlatData${BA_VERSION_NAME}.zip" ../../BA-FlatData/
           cd
+          cd BA-FlatData
+          git add .
+
+          git commit -m "提交文件"
+          git push origin
 
       - name: Upload Table artifacts
         uses: actions/upload-artifact@v4
         with:
           name: table-changes
           path: |
-            BA-FlatData/
             BA-Text/
           retention-days: 1
 
