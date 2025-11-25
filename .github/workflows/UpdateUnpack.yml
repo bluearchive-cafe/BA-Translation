@@ -214,7 +214,7 @@ jobs:
 
       - name: Setup FlatData
         run: |
-          python setup_flatdata.py
+          python setup_flatdata_jp.py
 
       - name: Downloads Table files and run MemoryPackRepacker
         run: |

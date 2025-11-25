@@ -2,7 +2,7 @@ name: Tools-Check Repository Changes
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -74,6 +74,16 @@ jobs:
           rm -rf BA-Tools
           mv BA-Unpack/* .
           rm -rf BA-Unpack
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Get new version
         id: new_ver
