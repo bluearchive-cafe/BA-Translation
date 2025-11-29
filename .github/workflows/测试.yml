@@ -1,266 +1,54 @@
-name: BlueArchive APK Hook
+name: Run Emulator and Frida Hook
 
-on: 
+on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
+
+env:
+  APK_URL: https://cdn.bluearchive.me/apk/蔚蓝档案.apk
+  PACKAGE_NAME: com.YostarJP.BlueArchive
+  APK_FILENAME: bluearchive.apk
 
 jobs:
-  hook-bluearchive:
+  hook:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        cache: 'gradle'
+        
+    - name: Install Frida Tools
+      run: pip install frida-tools
       
-    - name: Setup environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          android-tools-adb \
-          wget \
-          unzip \
-          openjdk-11-jdk \
-          python3 \
-          python3-pip
-
-    - name: Clone BA-Unpack repository
-      run: |
-        git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git
-        mv BA-Unpack/* .
-        rm -rf BA-Unpack
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Download APK
+      run: wget ${{ env.APK_URL }} -O ${{ env.APK_FILENAME }}
+      
+    - name: Start Android Emulator and Run Hook
+      uses: reactivecircus/android-emulator-runner@v2
       with:
-        python-version: '3.10'
-
-    - name: Install requirements
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt requests UnityPy
-        
-    - name: Extract XAPK using your script
-      run: |
-        echo "运行您的提取脚本..."
-        python3 setup_apk.py
-        
-        echo "=== 提取结果 ==="
-        find Temp -type f -name "*.apk" | head -10
-        echo "=== 目录结构 ==="
-        find Temp -type d | sort
-        
-    - name: Repack APK
-      run: |
-        echo "重新打包APK..."
-        python3 repack_apk.py
-        
-        echo "=== 打包结果 ==="
-        ls -la *.apk || echo "未找到APK文件"
-        
-    - name: Setup Android SDK
-      run: |
-        echo "设置Android SDK..."
-        mkdir -p android-sdk
-        cd android-sdk
-        
-        # 下载命令行工具
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip -q commandlinetools-linux-9477386_latest.zip
-        
-        echo "=== 解压后的目录结构 ==="
-        ls -la
-        
-        # 检查实际解压出的目录名
-        if [ -d "cmdline-tools" ]; then
-          echo "找到cmdline-tools目录"
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/
-        elif [ -d "tools" ]; then
-          echo "找到tools目录"
-          mkdir -p cmdline-tools
-          mv tools cmdline-tools/latest
-        else
-          echo "检查所有文件和目录:"
-          find . -type d -name "*tool*" -o -name "*cmd*" | sort
-          # 如果以上都不存在，直接使用当前目录
-          mkdir -p cmdline-tools
-          mv * cmdline-tools/latest/ 2>/dev/null || true
-        fi
-        
-        echo "=== 最终的目录结构 ==="
-        ls -la
-        ls -la cmdline-tools/latest/ || ls -la cmdline-tools/ || echo "无法列出目录"
-        
-        # 设置环境变量
-        echo "ANDROID_SDK_ROOT=$PWD" >> $GITHUB_ENV
-        echo "$PWD/cmdline-tools/latest/bin:$PWD/platform-tools" >> $GITHUB_PATH
-        
-        # 安装必要组件
-        echo "安装platform-tools..."
-        if [ -f "cmdline-tools/latest/bin/sdkmanager" ]; then
-          yes | cmdline-tools/latest/bin/sdkmanager --sdk_root=$PWD "platform-tools" > /dev/null 2>&1 || echo "安装完成"
-        else
-          # 尝试其他可能的路径
-          find . -name "sdkmanager" -type f | head -1
-          echo "尝试直接安装组件..."
-          wget -q https://dl.google.com/android/repository/platform-tools-latest-linux.zip
-          unzip -q platform-tools-latest-linux.zip
-        fi
-        
-    - name: Create and start emulator
-      run: |
-        echo "创建模拟器..."
-        # 使用简化方法创建模拟器
-        mkdir -p $HOME/.android/avd
-        cat > $HOME/.android/avd/test.ini << 'EOF'
-        avd.ini.encoding=UTF-8
-        path=$HOME/.android/avd/test.avd
-        path.rel=avd/test.avd
-        target=android-30
-        EOF
-        
-        mkdir -p $HOME/.android/avd/test.avd
-        cat > $HOME/.android/avd/test.avd/config.ini << 'EOF'
-        AvdId=test
-        avd.ini.encoding=UTF-8
-        hw.cpu.arch=x86_64
-        hw.device.manufacturer=Google
-        hw.device.name=pixel_4
-        image.sysdir.1=system-images/android-30/google_apis/x86_64/
-        tag.id=google_apis
-        tag.display=Google APIs
-        hw.lcd.density=440
-        hw.lcd.height=2280
-        hw.lcd.width=1080
-        EOF
-        
-        echo "启动模拟器..."
-        # 直接使用emulator命令
-        emulator -avd test -no-window -no-audio -no-snapshot -gpu swiftshader_indirect &
-        EMULATOR_PID=$!
-        
-        echo "等待模拟器启动..."
-        # 等待adb设备连接
-        timeout 120 bash -c 'until adb devices | grep -q "device$"; do sleep 5; echo "等待设备连接..."; adb start-server; done'
-        
-        echo "模拟器状态:"
-        adb devices
-        adb wait-for-device
-        
-        echo "等待系统启动..."
-        timeout 120 bash -c 'until adb shell getprop sys.boot_completed | grep -q "1"; do sleep 10; echo "等待系统启动..."; done'
-        
-        echo "模拟器启动完成"
-        
-    - name: Install APK
-      run: |
-        echo "安装APK..."
-        if [ -f "bluearchive_repacked.apk" ]; then
-          adb install -r bluearchive_repacked.apk
-        else
-          # 尝试安装提取的APK文件
-          echo "尝试安装提取的APK文件..."
-          find Temp -name "*.apk" -exec adb install -r {} \;
-        fi
-        
-        echo "已安装包:"
-        adb shell pm list packages | grep -i bluearchive || echo "未找到BlueArchive包"
-        
-    - name: Setup Frida
-      run: |
-        echo "设置Frida..."
-        wget -q https://github.com/frida/frida/releases/download/16.1.8/frida-server-16.1.8-android-x86_64.xz
-        unxz frida-server-16.1.8-android-x86_64.xz
-        adb push frida-server-16.1.8-android-x86_64 /data/local/tmp/frida-server
-        adb shell "chmod 755 /data/local/tmp/frida-server"
-        adb shell "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
-        sleep 10
-        
-        # 验证Frida安装
-        pip3 install frida-tools
-        timeout 30 frida-ps -U && echo "Frida连接成功" || echo "Frida连接测试超时，继续..."
-        
-    - name: Create and run hook
-      run: |
-        cat > hook.js << 'EOF'
-        Java.perform(function() {
-            console.log("[+] Hook脚本启动");
-            
-            setTimeout(function() {
-                try {
-                    var targetClass = Java.use("MX.NetworkProtocol.QueuingGetCryptoKeysResponse");
-                    console.log("[+] 找到目标类");
-                    
-                    targetClass.set_EncryptedSqlCipherLicense.implementation = function(value) {
-                        console.log("[HOOK] EncryptedSqlCipherLicense: " + value);
-                        var file = new File("/sdcard/license.txt", "w");
-                        file.write(value);
-                        file.close();
-                        return this.set_EncryptedSqlCipherLicense(value);
-                    };
-                    
-                    targetClass.set_EncryptedSqlCipherKey.implementation = function(value) {
-                        console.log("[HOOK] EncryptedSqlCipherKey: " + value);
-                        var file = new File("/sdcard/key.txt", "w");
-                        file.write(value);
-                        file.close();
-                        return this.set_EncryptedSqlCipherKey(value);
-                    };
-                    
-                    console.log("[+] Hook设置完成，等待游戏触发...");
-                    
-                } catch(e) { 
-                    console.log("Hook错误: " + e);
-                    console.log("堆栈: " + e.stack);
-                }
-            }, 10000);
-        });
-        EOF
-        
-        echo "启动游戏..."
-        adb shell am start -n com.yostarjp.bluearchive/com.yostarjp.bluearchive.MxUnityPlayerActivity
-        sleep 30
-        
-        echo "运行Hook..."
-        timeout 300 frida -U -l hook.js -f com.yostarjp.bluearchive --no-pause || echo "Hook执行完成"
-        
-    - name: Collect results
-      run: |
-        echo "收集结果..."
-        adb pull /sdcard/license.txt ./ || echo "未捕获license"
-        adb pull /sdcard/key.txt ./ || echo "未捕获key"
-        
-        echo "=== Hook结果 ==="
-        if [ -f "license.txt" ]; then
-          echo "✅ EncryptedSqlCipherLicense捕获成功"
-          echo "内容:"
-          cat license.txt
-        else
-          echo "❌ 未捕获到license"
-        fi
-        
-        if [ -f "key.txt" ]; then
-          echo "✅ EncryptedSqlCipherKey捕获成功"
-          echo "内容:"
-          cat key.txt
-        else
-          echo "❌ 未捕获到key"
-        fi
-        
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: bluearchive-results
-        path: |
-          license.txt
-          key.txt
-          bluearchive_repacked.apk
-        retention-days: 7
-        
-    - name: Cleanup
-      run: |
-        echo "清理环境..."
-        # 停止模拟器
-        pkill -f emulator || true
-        adb kill-server || true
+        api-level: 30
+        target: google_apis
+        arch: x86
+        profile: Pixel 2
+        emulator-options: -no-window -gpu swiftshader_indirect -accel auto
+        disable-animations: true
+        timeout: 10m
+        script: |
+          adb push /usr/local/lib/python3.10/dist-packages/frida/frida-server /data/local/tmp/
+          adb shell chmod 777 /data/local/tmp/frida-server
+          adb shell /data/local/tmp/frida-server &
+          
+          adb install ${{ env.APK_FILENAME }}
+          
+          sleep 5
+          
+          frida -U -f ${{ env.PACKAGE_NAME }} -l hook.js --no-pause --runtime=v8
+          
+          sleep 60
+          
+          adb shell am force-stop ${{ env.PACKAGE_NAME }}
