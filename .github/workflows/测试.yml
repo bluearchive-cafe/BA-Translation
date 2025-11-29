@@ -67,36 +67,47 @@ jobs:
         # 下载命令行工具
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
         unzip -q commandlinetools-linux-9477386_latest.zip
-        mv cmdline-tools latest
         mkdir -p cmdline-tools
-        mv latest cmdline-tools/
+        mv cmdline-tools cmdline-tools/latest
         
         # 设置环境变量
         echo "ANDROID_SDK_ROOT=$PWD" >> $GITHUB_ENV
         echo "$PWD/cmdline-tools/latest/bin:$PWD/platform-tools" >> $GITHUB_PATH
         
-        # 接受许可证
-        yes | sdkmanager --licenses > /dev/null 2>&1 || true
-        
         # 安装必要组件
-        sdkmanager "platform-tools" "emulator" "platforms;android-30" "system-images;android-30;google_apis;x86_64"
+        echo "安装platform-tools..."
+        yes | ./cmdline-tools/latest/bin/sdkmanager --sdk_root=$PWD "platform-tools" > /dev/null 2>&1 || echo "安装完成"
+        
+        echo "安装emulator..."
+        yes | ./cmdline-tools/latest/bin/sdkmanager --sdk_root=$PWD "emulator" > /dev/null 2>&1 || echo "安装完成"
+        
+        echo "安装platform..."
+        yes | ./cmdline-tools/latest/bin/sdkmanager --sdk_root=$PWD "platforms;android-30" > /dev/null 2>&1 || echo "安装完成"
+        
+        echo "安装系统镜像..."
+        yes | ./cmdline-tools/latest/bin/sdkmanager --sdk_root=$PWD "system-images;android-30;google_apis;x86_64" > /dev/null 2>&1 || echo "安装完成"
+        
+        echo "Android SDK设置完成"
         
     - name: Create and start emulator
       run: |
         echo "创建模拟器..."
-        avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64" -d pixel_4
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64" -d pixel_4 --force
         
         echo "启动模拟器..."
-        emulator -avd test -no-window -no-audio -no-snapshot -gpu swiftshader_indirect &
+        $ANDROID_SDK_ROOT/emulator/emulator -avd test -no-window -no-audio -no-snapshot -gpu swiftshader_indirect &
         EMULATOR_PID=$!
         
         echo "等待模拟器启动..."
-        adb wait-for-device
-        sleep 30
+        # 等待adb设备连接
+        timeout 60 bash -c 'until adb devices | grep -q "device$"; do sleep 2; adb kill-server; adb start-server; done'
         
         echo "模拟器状态:"
         adb devices
-        adb shell getprop ro.boot.completed
+        adb wait-for-device
+        
+        echo "等待系统启动..."
+        timeout 60 bash -c 'until adb shell getprop sys.boot_completed | grep -q "1"; do sleep 5; done'
         
     - name: Install APK
       run: |
@@ -109,7 +120,8 @@ jobs:
           find Temp -name "*.apk" -exec adb install {} \;
         fi
         
-        adb shell pm list packages | grep -i bluearchive
+        echo "已安装包:"
+        adb shell pm list packages | grep -i bluearchive || echo "未找到BlueArchive包"
         
     - name: Setup Frida
       run: |
@@ -121,7 +133,9 @@ jobs:
         adb shell "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
         sleep 10
         
+        # 验证Frida安装
         pip3 install frida-tools
+        frida-ps -U && echo "Frida连接成功" || echo "Frida连接失败，继续..."
         
     - name: Create and run hook
       run: |
@@ -150,31 +164,59 @@ jobs:
                         return this.set_EncryptedSqlCipherKey(value);
                     };
                     
-                } catch(e) { console.log("Error: " + e); }
-            }, 5000);
+                    console.log("[+] Hook设置完成，等待游戏触发...");
+                    
+                } catch(e) { 
+                    console.log("Hook错误: " + e);
+                    console.log("堆栈: " + e.stack);
+                }
+            }, 10000);
         });
         EOF
         
+        echo "启动游戏..."
         adb shell am start -n com.yostarjp.bluearchive/com.yostarjp.bluearchive.MxUnityPlayerActivity
         sleep 30
-        timeout 300 frida -U -l hook.js -f com.yostarjp.bluearchive --no-pause || echo "完成"
+        
+        echo "运行Hook..."
+        timeout 300 frida -U -l hook.js -f com.yostarjp.bluearchive --no-pause || echo "Hook执行完成"
         
     - name: Collect results
       run: |
-        adb pull /sdcard/license.txt ./ || echo "无license"
-        adb pull /sdcard/key.txt ./ || echo "无key"
+        echo "收集结果..."
+        adb pull /sdcard/license.txt ./ || echo "未捕获license"
+        adb pull /sdcard/key.txt ./ || echo "未捕获key"
         
-        echo "=== 结果 ==="
-        [ -f "license.txt" ] && cat license.txt || echo "无license数据"
-        [ -f "key.txt" ] && cat key.txt || echo "无key数据"
+        echo "=== Hook结果 ==="
+        if [ -f "license.txt" ]; then
+          echo "✅ EncryptedSqlCipherLicense捕获成功"
+          echo "内容:"
+          cat license.txt
+        else
+          echo "❌ 未捕获到license"
+        fi
+        
+        if [ -f "key.txt" ]; then
+          echo "✅ EncryptedSqlCipherKey捕获成功"
+          echo "内容:"
+          cat key.txt
+        else
+          echo "❌ 未捕获到key"
+        fi
         
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: bluearchive-results
         path: |
-          bluearchive_repacked.apk
           license.txt
           key.txt
-          Temp/
+          bluearchive_repacked.apk
         retention-days: 7
+        
+    - name: Cleanup
+      run: |
+        echo "清理环境..."
+        # 停止模拟器
+        pkill -f emulator || true
+        adb kill-server || true
