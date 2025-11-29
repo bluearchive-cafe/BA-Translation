@@ -1,0 +1,141 @@
+name: BlueArchive APK Hook
+
+on: 
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  hook-bluearchive:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          android-tools-adb \
+          wget \
+          unzip \
+          openjdk-11-jdk \
+          python3 \
+          python3-pip
+          
+    - name: Install Python dependencies
+      run: |
+        pip3 install requests
+        pip3 install UnityPy
+        
+    - name: Extract XAPK using your script
+      run: |
+        echo "运行您的提取脚本..."
+        python3 setup_apk.py
+        
+        echo "=== 提取结果 ==="
+        find Temp -type f -name "*.apk" | head -10
+        echo "=== 目录结构 ==="
+        find Temp -type d | sort
+        
+    - name: Repack APK
+      run: |
+        echo "重新打包APK..."
+        python3 repack_apk.py
+        
+        echo "=== 打包结果 ==="
+        ls -la *.apk || echo "未找到APK文件"
+        
+    - name: Start Android emulator
+      run: |
+        echo "启动模拟器..."
+        wget -q https://github.com/remote-android/redroid-actions/raw/master/start-redroid.sh
+        chmod +x start-redroid.sh
+        ./start-redroid.sh &
+        sleep 60
+        
+        adb devices
+        adb wait-for-device
+        echo "模拟器启动完成"
+        
+    - name: Install repacked APK
+      run: |
+        if [ -f "bluearchive_repacked.apk" ]; then
+          echo "安装重新打包的APK..."
+          adb install bluearchive_repacked.apk
+        else
+          # 尝试安装提取的APK文件
+          echo "尝试安装提取的APK文件..."
+          find Temp -name "*.apk" -exec adb install {} \;
+        fi
+        
+        adb shell pm list packages | grep -i bluearchive
+        
+    - name: Setup Frida
+      run: |
+        echo "设置Frida..."
+        wget -q https://github.com/frida/frida/releases/download/16.1.8/frida-server-16.1.8-android-x86_64.xz
+        unxz frida-server-16.1.8-android-x86_64.xz
+        adb push frida-server-16.1.8-android-x86_64 /data/local/tmp/frida-server
+        adb shell "chmod 755 /data/local/tmp/frida-server"
+        adb shell "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
+        sleep 10
+        
+        pip3 install frida-tools
+        
+    - name: Create and run hook
+      run: |
+        cat > hook.js << 'EOF'
+        Java.perform(function() {
+            console.log("[+] Hook脚本启动");
+            
+            setTimeout(function() {
+                try {
+                    var targetClass = Java.use("MX.NetworkProtocol.QueuingGetCryptoKeysResponse");
+                    console.log("[+] 找到目标类");
+                    
+                    targetClass.set_EncryptedSqlCipherLicense.implementation = function(value) {
+                        console.log("[HOOK] EncryptedSqlCipherLicense: " + value);
+                        var file = new File("/sdcard/license.txt", "w");
+                        file.write(value);
+                        file.close();
+                        return this.set_EncryptedSqlCipherLicense(value);
+                    };
+                    
+                    targetClass.set_EncryptedSqlCipherKey.implementation = function(value) {
+                        console.log("[HOOK] EncryptedSqlCipherKey: " + value);
+                        var file = new File("/sdcard/key.txt", "w");
+                        file.write(value);
+                        file.close();
+                        return this.set_EncryptedSqlCipherKey(value);
+                    };
+                    
+                } catch(e) { console.log("Error: " + e); }
+            }, 5000);
+        });
+        EOF
+        
+        adb shell am start -n com.yostarjp.bluearchive/com.yostarjp.bluearchive.MxUnityPlayerActivity
+        sleep 30
+        timeout 300 frida -U -l hook.js -f com.yostarjp.bluearchive --no-pause || echo "完成"
+        
+    - name: Collect results
+      run: |
+        adb pull /sdcard/license.txt ./ || echo "无license"
+        adb pull /sdcard/key.txt ./ || echo "无key"
+        
+        echo "=== 结果 ==="
+        [ -f "license.txt" ] && cat license.txt || echo "无license数据"
+        [ -f "key.txt" ] && cat key.txt || echo "无key数据"
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: bluearchive-results
+        path: |
+          bluearchive_repacked.apk
+          license.txt
+          key.txt
+          Temp/
+        retention-days: 7
