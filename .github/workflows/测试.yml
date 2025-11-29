@@ -34,10 +34,10 @@ jobs:
         api-level: 30
         target: google_apis
         arch: x86
-        profile: Pixel 2
+        profile: pixel
         emulator-options: -no-window -gpu swiftshader_indirect -accel auto
         disable-animations: true
-        timeout: 10m
+        emulator-boot-timeout: 600
         script: |
           adb push /usr/local/lib/python3.10/dist-packages/frida/frida-server /data/local/tmp/
           adb shell chmod 777 /data/local/tmp/frida-server
