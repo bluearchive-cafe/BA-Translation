@@ -34,6 +34,16 @@ jobs:
       run-flags: ${{ steps.set-outputs.outputs.run-flags }}
       setup-flatdata-flags: ${{ steps.set-outputs.outputs.setup-flatdata-flags }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
       - name: Checkout BA-Unpack repository
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git
