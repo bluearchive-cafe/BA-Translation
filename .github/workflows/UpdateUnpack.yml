@@ -1,175 +1,152 @@
-name: Unpack-Update Table & Media
+name: Unpack-Update Table
 
 on:
   workflow_dispatch:
     inputs:
-      Unpack_FlatData:
-        description: 'Unpack FlatData?'
+      servers:
+        description: 'Select servers'
+        required: true
+        type: multiple choice
+        options:
+          - JP
+          - GL
+          - CN
+        default: ['JP']
+      db_key:
+        description: 'Database decryption key (for JP server)'
         required: false
-        type: boolean
-        default: true
-      Downloads_Media:
-        description: 'Downloads Media?'
-        required: false
-        type: boolean
-        default: false
+        type: string
+        default: ''
   repository_dispatch:
     types: [run-deployment]
   schedule:
-    - cron: '0 */1 * * *'  # 每小时运行一次
-    - cron: '50 17 19 11 2'  # 额外添加：2025年11月19日 17:50 (星期三)
+    - cron: '0 */1 * * *'
 
 permissions:
   contents: write
 
 jobs:
-  check-version:
-    runs-on: ubuntu-latest
-    outputs:
-      should-run: ${{ steps.check-commit.outputs.should-run }}
-      version: ${{ steps.get-versions.outputs.BA_VERSION_NAME }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-
-      - name: Clone repository
-        run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git
-
-      - name: Move contents to current directory
-        run: |
-          mv BA-Unpack/* .
-          rm -rf BA-Unpack
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Install requirements
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Get version
-        id: get-versions
-        run: bash version.sh info.json >> "$GITHUB_OUTPUT"
-
-      - name: Check BA-Text repository for version file
-        id: check-commit
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "手动触发，跳过版本检查"
-            echo "should-run=true" >> $GITHUB_OUTPUT
-          fi
-          
-          VERSION="${{ steps.get-versions.outputs.BA_VERSION_NAME }}"
-          echo "当前版本: $VERSION"
-          
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-check
-          
-          if [ -f "ba-text-check/日服${VERSION}.zip" ]; then
-            echo "发现版本 $VERSION 的文件，跳过执行"
-            echo "should-run=false" >> $GITHUB_OUTPUT
-          else
-            echo "未找到版本 $VERSION 的文件，继续执行"
-            echo "should-run=true" >> $GITHUB_OUTPUT
-          fi
-          
-          rm -rf ba-text-check
-
   setup:
     runs-on: ubuntu-latest
-    needs: check-version
-    if: |
-      (github.event_name == 'schedule' && needs.check-version.outputs.should-run == 'true') ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'repository_dispatch'
     outputs:
-      version: ${{ steps.get-versions.outputs.BA_VERSION_NAME }}
-      trigger-type: ${{ steps.detect-trigger.outputs.trigger-type }}
-      unpack-flatdata: ${{ steps.detect-params.outputs.unpack-flatdata }}
-      downloads-media: ${{ steps.detect-params.outputs.downloads-media }}
+      matrix: ${{ steps.set-outputs.outputs.matrix }}
+      versions: ${{ steps.set-outputs.outputs.versions }}
+      flatdata-versions: ${{ steps.set-outputs.outputs.flatdata-versions }}
+      run-flags: ${{ steps.set-outputs.outputs.run-flags }}
+      setup-flatdata-flags: ${{ steps.set-outputs.outputs.setup-flatdata-flags }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-
-      - name: Clone repository
+      - name: Checkout BA-Unpack repository
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git
-
-      - name: Move contents to current directory
-        run: |
           mv BA-Unpack/* .
           rm -rf BA-Unpack
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Install requirements
+      - name: Set up Python environment
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Login
+      - name: Determine servers
+        id: determine-servers
         run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-      - name: Detect trigger type
-        id: detect-trigger
-        run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "trigger-type=repository_dispatch" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "trigger-type=schedule" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SERVERS_RAW='${{ toJSON(inputs.servers) }}'
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            SERVERS_RAW='${{ toJSON(github.event.client_payload.servers) || '["JP"]' }}'
           else
-            echo "trigger-type=workflow_dispatch" >> $GITHUB_OUTPUT
+            SERVERS_RAW='["JP"]'
           fi
+          echo "SERVERS_RAW=$SERVERS_RAW" >> $GITHUB_OUTPUT
 
-      - name: Detect trigger parameters
-        id: detect-params
-        run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            UNPACK_FLATDATA="${{ github.event.client_payload.unpack_flatdata || 'true' }}"
-            DOWNLOADS_MEDIA="${{ github.event.client_payload.downloads_media || 'false' }}"
-            echo "unpack-flatdata=$UNPACK_FLATDATA" >> $GITHUB_OUTPUT
-            echo "downloads-media=$DOWNLOADS_MEDIA" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "unpack-flatdata=true" >> $GITHUB_OUTPUT
-            echo "downloads-media=false" >> $GITHUB_OUTPUT
-          else
-            echo "unpack-flatdata=${{ inputs.Unpack_FlatData || 'true' }}" >> $GITHUB_OUTPUT
-            echo "downloads-media=${{ inputs.Downloads_Media || 'false' }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Debug trigger info
-        run: |
-          echo "Event name: ${{ github.event_name }}"
-          echo "Client payload: ${{ toJSON(github.event.client_payload) }}"
-          echo "Inputs: ${{ toJSON(github.event.inputs) }}"
-          echo "Detected parameters:"
-          echo "  unpack-flatdata: ${{ steps.detect-params.outputs.unpack-flatdata }}"
-          echo "  downloads-media: ${{ steps.detect-params.outputs.downloads-media }}"
-
-      - name: Get version
+      - name: Get version information
         id: get-versions
-        run: bash version.sh info.json >> "$GITHUB_OUTPUT"
-
-      - name: Get version name
         run: |
-          echo "BA_VERSION_NAME=${{ steps.get-versions.outputs.BA_VERSION_NAME }}" >> $GITHUB_ENV
+          SERVERS_RAW='${{ steps.determine-servers.outputs.SERVERS_RAW }}'
+          SERVERS=$(echo "$SERVERS_RAW" | tr -d '[]" ')
+          IFS=',' read -ra SERVER_ARRAY <<< "$SERVERS"
+          
+          VERSIONS="{}"
+          FLATDATA_VERSIONS="{}"
+          
+          for SERVER in "${SERVER_ARRAY[@]}"; do
+            VERSION=$(bash version.sh "$SERVER" info.json | grep BA_VERSION_NAME | cut -d= -f2)
+            FLATDATA_VERSION=$(bash version.sh "$SERVER" info.json | grep FLATDATA_VERSION_NAME | cut -d= -f2)
+            
+            VERSIONS=$(echo "$VERSIONS" | jq --arg server "$SERVER" --arg version "$VERSION" '. + {($server): $version}')
+            FLATDATA_VERSIONS=$(echo "$FLATDATA_VERSIONS" | jq --arg server "$SERVER" --arg version "$FLATDATA_VERSION" '. + {($server): $version}')
+          done
+          
+          echo "VERSIONS=$VERSIONS" >> $GITHUB_OUTPUT
+          echo "FLATDATA_VERSIONS=$FLATDATA_VERSIONS" >> $GITHUB_OUTPUT
 
-  table:
+      - name: Check existing files
+        id: check-files
+        run: |
+          SERVERS_RAW='${{ steps.determine-servers.outputs.SERVERS_RAW }}'
+          SERVERS=$(echo "$SERVERS_RAW" | tr -d '[]" ')
+          IFS=',' read -ra SERVER_ARRAY <<< "$SERVERS"
+          
+          VERSIONS='${{ steps.get-versions.outputs.VERSIONS }}'
+          FLATDATA_VERSIONS='${{ steps.get-versions.outputs.FLATDATA_VERSIONS }}'
+          
+          RUN_FLAGS="{}"
+          SETUP_FLATDATA_FLAGS="{}"
+          
+          for SERVER in "${SERVER_ARRAY[@]}"; do
+            SERVER_VERSION=$(echo "$VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
+            SERVER_FLATDATA_VERSION=$(echo "$FLATDATA_VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
+            
+            git clone --depth 1 --branch "$SERVER" https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git flatdata-check-$SERVER || true
+            
+            if [ -f "flatdata-check-${SERVER}/${SERVER}${SERVER_FLATDATA_VERSION}.zip" ]; then
+              FLATDATA_EXISTS="true"
+            else
+              FLATDATA_EXISTS="false"
+            fi
+            rm -rf "flatdata-check-${SERVER}"
+            
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+              RUN_FLAGS=$(echo "$RUN_FLAGS" | jq --arg server "$SERVER" '. + {($server): "true"}')
+              SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq --arg server "$SERVER" --arg flag "$FLATDATA_EXISTS" '. + {($server): $flag}')
+            else
+              git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-check
+              if [ -f "ba-text-check/${SERVER}${SERVER_VERSION}.zip" ]; then
+                RUN_FLAGS=$(echo "$RUN_FLAGS" | jq --arg server "$SERVER" '. + {($server): "false"}')
+                SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq --arg server "$SERVER" --arg flag "true" '. + {($server): $flag}')
+              else
+                RUN_FLAGS=$(echo "$RUN_FLAGS" | jq --arg server "$SERVER" '. + {($server): "true"}')
+                SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq --arg server "$SERVER" --arg flag "$FLATDATA_EXISTS" '. + {($server): $flag}')
+              fi
+              rm -rf ba-text-check
+            fi
+          done
+          
+          echo "RUN_FLAGS=$RUN_FLAGS" >> $GITHUB_OUTPUT
+          echo "SETUP_FLATDATA_FLAGS=$SETUP_FLATDATA_FLAGS" >> $GITHUB_OUTPUT
+
+      - name: Set final outputs
+        id: set-outputs
+        run: |
+          echo "matrix=${{ steps.determine-servers.outputs.SERVERS_RAW }}" >> $GITHUB_OUTPUT
+          echo "versions=${{ steps.get-versions.outputs.VERSIONS }}" >> $GITHUB_OUTPUT
+          echo "flatdata-versions=${{ steps.get-versions.outputs.FLATDATA_VERSIONS }}" >> $GITHUB_OUTPUT
+          echo "run-flags=${{ steps.check-files.outputs.RUN_FLAGS }}" >> $GITHUB_OUTPUT
+          echo "setup-flatdata-flags=${{ steps.check-files.outputs.SETUP_FLATDATA_FLAGS }}" >> $GITHUB_OUTPUT
+
+  Table:
     runs-on: ubuntu-latest
     needs: setup
-    if: ${{ needs.setup.outputs.unpack-flatdata == 'true' }}
+    strategy:
+      matrix:
+        server: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    if: |
+      (github.event_name == 'schedule' && fromJSON(needs.setup.outputs.run-flags)[matrix.server] == 'true') ||
+      github.event_name == 'workflow_dispatch' || 
+      github.event_name == 'repository_dispatch'
+    env:
+      SERVER: ${{ matrix.server }}
+      BA_VERSION_NAME: ${{ fromJSON(needs.setup.outputs.versions)[matrix.server] }}
+      FLATDATA_VERSION_NAME: ${{ fromJSON(needs.setup.outputs.flatdata-versions)[matrix.server] }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -199,364 +176,286 @@ jobs:
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-
-      - name: Get version from setup job
-        run: |
-          echo "BA_VERSION_NAME=${{ needs.setup.outputs.version }}" >> $GITHUB_ENV
 
       - name: Clone BA-FlatData
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git
 
-      - name: Clone BA-Text
+      - name: Check for existing FlatData zip
+        id: check-flatdata-zip
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
+          if [ -f "BA-FlatData/${SERVER}${BA_VERSION_NAME}.zip" ]; then
+            echo "Using existing FlatData zip file"
+            echo "zip-exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "FlatData zip file not found, will generate new one"
+            echo "zip-exists=false" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Setup FlatData
+      - name: Setup FlatData conditionally
+        if: fromJSON(needs.setup.outputs.setup-flatdata-flags)[matrix.server] == 'false' && steps.check-flatdata-zip.outputs.zip-exists == 'false'
         run: |
-          python setup_flatdata_jp.py
+          if [ "$SERVER" = "CN" ]; then
+            git clone --depth 1 --branch "CN" https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git flatdata-cn
+            if [ -f "flatdata-cn/dump.cs" ]; then
+              mkdir -p Dumps
+              cp flatdata-cn/dump.cs Dumps/
+              echo "Copied dump.cs from CN branch to Dumps directory"
+            fi
+            rm -rf flatdata-cn
+          fi
+          python setup_flatdata.py $SERVER
 
       - name: Downloads Table files and run MemoryPackRepacker
         run: |
-          chmod +x update.sh
-          ./update.sh JP Table
+          chmod +x update/update_table.sh
+          ./update/update_table.sh $SERVER
 
-      - name: Unpack ExcelDB.db and Excel.zip
+      - name: Create temporary directory for unpacked files
         run: |
-          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData config.json BA-Text 10
+          mkdir -p temp_unpacked
 
-      - name: Prepare FlatData
+      - name: Decrypt database for JP server
+        if: matrix.server == 'JP'
         run: |
-          cd ./Extracted/FlatData/
-          zip -j "FlatData${BA_VERSION_NAME}.zip" *
-          mv "FlatData${BA_VERSION_NAME}.zip" ../../BA-FlatData/
-          cd
-
-      - name: Prepare Text files
-        run: |
-          cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} BA-Text
-          cd BA-Text
-          zip -r "./日服${BA_VERSION_NAME}.zip" ExcelTable
-          cd
-
-      - name: Prepare Assets files
-        run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
-          FILES=("TableCatalog.json" "MediaCatalog.json" "BundlePackingInfo-iOS.json" "BundlePackingInfo-Android.json")
-
-          for file in "${FILES[@]}"; do
-            if [ -f "BA-Assets/$file" ]; then
-              rm "BA-Assets/$file"
+          DB_FILE="./downloads/TableBundles/ExcelDB.db"
+          if [ -f "$DB_FILE" ]; then
+            if [ -n "${{ inputs.db_key }}" ]; then
+              KEY="${{ inputs.db_key }}"
+            else
+              KEY="${{ secrets.DB_DECRYPT_KEY }}"
             fi
-          done
-
-          cp {TableCatalog.json,MediaCatalog.json,BundlePackingInfo-iOS.json,BundlePackingInfo-Android.json} "BA-Assets"
-          if [ -d "BA-Assets/DBSchema" ]; then
-            rm -rf "BA-Assets/DBSchema"
+            
+            echo "PRAGMA key = \"x'$KEY'\";" > decrypt_commands.txt
+            echo "BEGIN TRANSACTION;" >> decrypt_commands.txt
+            echo "SELECT sqlcipher_export('main');" >> decrypt_commands.txt
+            echo "COMMIT;" >> decrypt_commands.txt
+            echo ".quit" >> decrypt_commands.txt
+            
+            sqlcipher "$DB_FILE" < decrypt_commands.txt
+            echo "Database decrypted successfully"
+          else
+            echo "Database file not found: $DB_FILE"
           fi
-          if [ -d "BA-Assets/ExcelTable" ]; then
-            rm -rf "BA-Assets/ExcelTable"
+
+      - name: Unpack ExcelDB.db and Excel.zip to temporary directory
+        run: |
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./temp_unpacked/FlatData config.json temp_text $SERVER
+
+      - name: Prepare FlatData zip conditionally
+        if: fromJSON(needs.setup.outputs.setup-flatdata-flags)[matrix.server] == 'false' && steps.check-flatdata-zip.outputs.zip-exists == 'false'
+        run: |
+          mkdir -p temp_flatdata_output
+          cd ./temp_unpacked/FlatData/
+          zip -j "../../temp_flatdata_output/${SERVER}${BA_VERSION_NAME}.zip" *
+          cd
+
+      - name: Check for existing Text zip
+        id: check-text-zip
+        run: |
+          if [ -f "${SERVER}${BA_VERSION_NAME}.zip" ]; then
+            echo "Using existing Text zip file"
+            echo "text-zip-exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Text zip file not found, will generate new one"
+            echo "text-zip-exists=false" >> $GITHUB_OUTPUT
           fi
-          mv "BA-Text/ExcelTable" "BA-Assets/ExcelTable"
 
-          cd BA-Assets
+      - name: Prepare Text zip conditionally
+        if: steps.check-text-zip.outputs.text-zip-exists == 'false'
+        run: |
+          mkdir -p temp_text_output
+          
+          if [ -d "temp_unpacked/FlatData/ExcelTable" ]; then
+            cp -r temp_unpacked/FlatData/ExcelTable temp_text_output/
+          fi
+          
+          cd temp_text_output
+          zip -r "../temp_flatdata_output/${SERVER}${BA_VERSION_NAME}.zip" *
+          cd
 
-          for item in ExcelTable TableCatalog.json MediaCatalog.json BundlePackingInfo-iOS.json BundlePackingInfo-Android.json; do
-              if [ -e "$item" ]; then
-                  if [ -d "$item" ]; then
-                      find "$item" -type f | while read -r file; do
-                          file_size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
-                          if [ "$file_size" -gt 104857600 ]; then
-                              gzip -c "$file" > "$file.gz"
-                              rm "$file"
-                          fi
-                      done
-                  else
-                      file_size=$(stat -c%s "$item" 2>/dev/null || stat -f%z "$item")
-                      if [ "$file_size" -gt 104857600 ]; then
-                          gzip -c "$item" > "$item.gz"
-                          rm "$item"
-                      fi
-                  fi
-              fi
-          done
+      - name: Check for existing Catalog zip
+        id: check-catalog-zip
+        run: |
+          if [ -f "${SERVER}Catalog${BA_VERSION_NAME}.zip" ]; then
+            echo "Using existing Catalog zip file"
+            echo "catalog-zip-exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Catalog zip file not found, will generate new one"
+            echo "catalog-zip-exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Prepare Catalog zip conditionally
+        if: steps.check-catalog-zip.outputs.catalog-zip-exists == 'false'
+        run: |
+          if [ -f "TableCatalog.json" ] && [ -f "MediaCatalog.json" ] && [ -f "BundlePackingInfo-iOS.json" ] && [ -f "BundlePackingInfo-Android.json" ]; then
+            mkdir -p temp_flatdata_output
+            zip "temp_flatdata_output/${SERVER}Catalog${BA_VERSION_NAME}.zip" TableCatalog.json MediaCatalog.json BundlePackingInfo-iOS.json BundlePackingInfo-Android.json
+          fi
 
       - name: Upload Table artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: table-changes
+          name: table-changes-${{ matrix.server }}
           path: |
-            BA-FlatData/
-            BA-Text/
-            BA-Assets/
+            temp_flatdata_output/
           retention-days: 1
+        continue-on-error: true
 
-  media:
+  Commit:
     runs-on: ubuntu-latest
-    needs: setup
-    if: ${{ needs.setup.outputs.downloads-media == 'true' }}
+    needs: [setup, Table]
+    if: always() && (contains(needs.*.result, 'success') || contains(needs.*.result, 'skipped')) && ((github.event_name == 'schedule' && fromJSON(needs.setup.outputs.run-flags)[matrix.server] == 'true') || github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: false
 
-      - name: Clone repository
-        run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git
-
-      - name: Move contents to current directory
-        run: |
-          mv BA-Unpack/* .
-          rm -rf BA-Unpack
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Install requirements
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Login
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-      - name: Get version from setup job
-        run: |
-          echo "BA_VERSION_NAME=${{ needs.setup.outputs.version }}" >> $GITHUB_ENV
-
-      - name: Downloads Media files
-        run: |
-          chmod +x update.sh
-          ./update.sh JP Media 8
-
-      - name: Create media zip package
-        run: |
-          if [ -d "./media_temp" ] && [ "$(ls -A ./media_temp 2>/dev/null)" ]; then
-            cd ./media_temp
-            zip -r "../media_extracted_content.zip" .
-            cd
-          else
-            touch empty_media.zip
-          fi
-
-      - name: Upload Media zip artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: media-zip
-          path: |
-            media_extracted_content.zip
-            empty_media.zip
-          retention-days: 1
-
-  final-commit:
-    runs-on: ubuntu-latest
-    needs: [setup, table, media]
-    if: always() && (contains(needs.*.result, 'success') || contains(needs.*.result, 'skipped')) && ((github.event_name == 'schedule' && needs.check-version.outputs.should-run == 'true') || github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch')
-    env:
-      BA_VERSION_NAME: ${{ needs.setup.outputs.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-
-      - name: Clone BA-Assets repository
-        run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Assets.git
-
-      - name: Clone BA-Text repository
+      - name: Clone repositories
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
-
-      - name: Clone BA-FlatData repository
-        run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git
 
-      - name: Download Table artifacts
-        if: needs.table.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: table-changes
-          path: artifacts/table-changes
-          retry-count: 5
-          retry-delay: 30000
-
-      - name: Download Media zip artifacts
-        if: needs.media.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: media-zip
-          path: artifacts/media-zip
-          retry-count: 5
-          retry-delay: 30000
-
-      - name: Extract and merge all artifacts
+      - name: Download all artifacts
         run: |
-          echo "解压并合并所有内容到对应仓库..."
+          SERVERS_RAW='${{ needs.setup.outputs.matrix }}'
+          SERVERS=$(echo "$SERVERS_RAW" | tr -d '[]" ')
+          IFS=',' read -ra SERVER_ARRAY <<< "$SERVERS"
           
-          # 处理 BA-Text
-          if [ -d "artifacts/table-changes/BA-Text" ]; then
-            echo "合并 BA-Text 内容..."
-            rsync -av artifacts/table-changes/BA-Text/ BA-Text/ || true
-          fi
+          for SERVER in "${SERVER_ARRAY[@]}"; do
+            if [ "${{ github.event_name }}" == 'schedule' ] && [ "${{ fromJSON(needs.setup.outputs.run-flags)[SERVER] }}" == 'false' ]; then
+              continue
+            fi
+            
+            echo "Downloading artifacts for server: $SERVER"
+            mkdir -p artifacts/$SERVER
+            gh run download --repo $GITHUB_REPOSITORY --name table-changes-$SERVER --dir artifacts/$SERVER || echo "No artifacts found for $SERVER"
+          done
+
+      - name: Process and merge artifacts
+        run: |
+          SERVERS_RAW='${{ needs.setup.outputs.matrix }}'
+          SERVERS=$(echo "$SERVERS_RAW" | tr -d '[]" ')
+          IFS=',' read -ra SERVER_ARRAY <<< "$SERVERS"
+          VERSIONS='${{ needs.setup.outputs.versions }}'
+          FLATDATA_VERSIONS='${{ needs.setup.outputs.flatdata-versions }}'
+          SETUP_FLATDATA_FLAGS='${{ needs.setup.outputs.setup-flatdata-flags }}'
           
-          # 处理 BA-FlatData
-          if [ -d "artifacts/table-changes/BA-FlatData" ]; then
-            echo "合并 BA-FlatData 内容..."
-            rsync -av artifacts/table-changes/BA-FlatData/ BA-FlatData/ || true
-          fi
+          FLATDATA_HAS_CHANGES=false
+          TEXT_HAS_CHANGES=false
           
-          # 处理 BA-Assets
-          if [ -d "artifacts/table-changes/BA-Assets" ]; then
-            echo "合并 BA-Assets 内容..."
-            rsync -av artifacts/table-changes/BA-Assets/ BA-Assets/ || true
-          fi
+          for SERVER in "${SERVER_ARRAY[@]}"; do
+            if [ "${{ github.event_name }}" == 'schedule' ] && [ "$(echo "$SETUP_FLATDATA_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')" == 'false' ]; then
+              continue
+            fi
+            
+            SERVER_VERSION=$(echo "$VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
+            SERVER_FLATDATA_VERSION=$(echo "$FLATDATA_VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
+            NEED_SETUP_FLATDATA=$(echo "$SETUP_FLATDATA_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
+            
+            echo "Processing server: $SERVER, Version: $SERVER_VERSION"
+            
+            if [ -d "artifacts/$SERVER/temp_flatdata_output" ]; then
+              echo "Found artifacts for $SERVER"
+              
+              if [ "$NEED_SETUP_FLATDATA" = "false" ]; then
+                if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" ]; then
+                  echo "Copying FlatData zip to BA-FlatData"
+                  cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" "BA-FlatData/"
+                  FLATDATA_HAS_CHANGES=true
+                fi
+              fi
+              
+              if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" ]; then
+                echo "Found Text zip file for $SERVER"
+                cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" "BA-Text/"
+                TEXT_HAS_CHANGES=true
+              fi
+              
+              if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}Catalog${SERVER_VERSION}.zip" ]; then
+                echo "Found Catalog zip file for $SERVER"
+                cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}Catalog${SERVER_VERSION}.zip" "BA-Text/"
+                TEXT_HAS_CHANGES=true
+              fi
+            fi
+          done
           
-          # 处理 Media 内容
-          if [ -f "artifacts/media-zip/media_extracted_content.zip" ]; then
-            echo "解压 Media ZIP 包到 BA-Assets..."
-            unzip -q -o artifacts/media-zip/media_extracted_content.zip -d BA-Assets/
-            echo "Media 内容已合并到 BA-Assets"
-          elif [ -f "artifacts/media-zip/empty_media.zip" ]; then
-            echo "没有 Media 内容可合并"
-          fi
-          
-          echo "所有内容合并完成"
+          echo "FLATDATA_HAS_CHANGES=$FLATDATA_HAS_CHANGES" >> $GITHUB_ENV
+          echo "TEXT_HAS_CHANGES=$TEXT_HAS_CHANGES" >> $GITHUB_ENV
 
       - name: Configure git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Set version in environment
-        run: |
-          echo "BA_VERSION_NAME=$BA_VERSION_NAME"
-          echo "当前版本: $BA_VERSION_NAME"
-
       - name: Commit to BA-Text
-        if: needs.table.result == 'success'
+        if: env.TEXT_HAS_CHANGES == 'true'
         run: |
-          echo "提交到 BA-Text，版本: $BA_VERSION_NAME"
           cd BA-Text
+          SERVERS_RAW='${{ needs.setup.outputs.matrix }}'
+          SERVERS=$(echo "$SERVERS_RAW" | tr -d '[]" ')
+          IFS=',' read -ra SERVER_ARRAY <<< "$SERVERS"
+          VERSIONS='${{ needs.setup.outputs.versions }}'
           
-          git add .
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Text files - version $BA_VERSION_NAME"
-            git push origin
-            echo "BA-Text 提交完成"
-          else
-            echo "BA-Text 没有变更需要提交"
-          fi
+          for SERVER in "${SERVER_ARRAY[@]}"; do
+            if [ "${{ github.event_name }}" == 'schedule' ] && [ "${{ fromJSON(needs.setup.outputs.run-flags)[SERVER] }}" == 'false' ]; then
+              continue
+            fi
+            
+            SERVER_VERSION=$(echo "$VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
+            
+            if git show-ref --quiet refs/heads/$SERVER; then
+              git checkout $SERVER
+            else
+              git checkout -b $SERVER
+            fi
+            
+            git add .
+            if ! git diff --staged --quiet; then
+              git commit -m "Update $SERVER Text files - version $SERVER_VERSION"
+              git push origin $SERVER
+              echo "BA-Text $SERVER branch committed"
+            else
+              echo "BA-Text $SERVER branch no changes to commit"
+            fi
+          done
           cd ..
 
       - name: Commit to BA-FlatData
-        if: needs.table.result == 'success'
+        if: env.FLATDATA_HAS_CHANGES == 'true'
         run: |
-          echo "提交到 BA-FlatData，版本: $BA_VERSION_NAME"
           cd BA-FlatData
+          SERVERS_RAW='${{ needs.setup.outputs.matrix }}'
+          SERVERS=$(echo "$SERVERS_RAW" | tr -d '[]" ')
+          IFS=',' read -ra SERVER_ARRAY <<< "$SERVERS"
+          VERSIONS='${{ needs.setup.outputs.versions }}'
+          SETUP_FLATDATA_FLAGS='${{ needs.setup.outputs.setup-flatdata-flags }}'
           
-          git add .
-          if ! git diff --staged --quiet; then
-            git commit -m "Update FlatData - version $BA_VERSION_NAME"
-            git push origin
-            echo "BA-FlatData 提交完成"
-          else
-            echo "BA-FlatData 没有变更需要提交"
-          fi
-          cd ..
-
-      - name: Smart commit to BA-Assets
-        if: needs.table.result == 'success' || needs.media.result == 'success'
-        run: |
-          echo "开始提交到 BA-Assets，版本: $BA_VERSION_NAME"
-          cd BA-Assets
-          
-          echo "Committing mp4 files..."
-          find . -name "*.mp4" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: mp4 files - version $BA_VERSION_NAME"
-          fi
-  
-          echo "Committing jpg files..."
-          find . -name "*.jpg" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: jpg files - version $BA_VERSION_NAME"
-          fi        
-
-          echo "Committing ogg files..."
-          find . -name "*.ogg" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: ogg files - version $BA_VERSION_NAME"
-          fi
-          
-          echo "Committing json files..."
-          find . -name "*.json" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: json files - version $BA_VERSION_NAME"
-          fi
-          
-          echo "Committing zip files..."
-          find . -name "*.zip" -type f | head -1000 | while read file; do
-            git add "$file"
-          done
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: zip files - version $BA_VERSION_NAME"
-          fi
-          
-          echo "Committing remaining files in batches..."
-          batch_num=1
-          find . -type f | grep -vE '\.(mp4|ogg|json|zip)$' | while read file; do
-            git add "$file"
-            if [ $((batch_num % 1000)) -eq 0 ]; then
-              if ! git diff --staged --quiet; then
-                git commit -m "Update Assets: remaining files batch $((batch_num/1000)) - version $BA_VERSION_NAME"
-              fi
+          for SERVER in "${SERVER_ARRAY[@]}"; do
+            if [ "${{ github.event_name }}" == 'schedule' ] && [ "$(echo "$SETUP_FLATDATA_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')" == 'false' ]; then
+              continue
             fi
-            ((batch_num++))
+            
+            SERVER_VERSION=$(echo "$VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
+            
+            if git show-ref --quiet refs/heads/$SERVER; then
+              git checkout $SERVER
+            else
+              git checkout -b $SERVER
+            fi
+            
+            git add .
+            if ! git diff --staged --quiet; then
+              git commit -m "Update $SERVER FlatData - version $SERVER_VERSION"
+              git push origin $SERVER
+              echo "BA-FlatData $SERVER branch committed"
+            else
+              echo "BA-FlatData $SERVER branch no changes to commit"
+            fi
           done
-          
-          if ! git diff --staged --quiet; then
-            git commit -m "Update Assets: final batch of remaining files - version $BA_VERSION_NAME"
-          fi
-          
-          git push origin
-          echo "BA-Assets 提交完成"
+          cd ..
 
       - name: Cleanup
         run: |
           rm -rf artifacts
-
-  media-run:
-    runs-on: ubuntu-latest
-    needs: [setup, table, media, final-commit]
-    if: ${{ github.event.client_payload.run_media == true }}
-    steps:
-      - name: Trigger workflow with Media enabled
-        run: |
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "run-deployment"}'
-
-      - name: Deploy Extract
-        run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "Extract"}'

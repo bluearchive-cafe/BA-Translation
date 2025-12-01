@@ -1,37 +1,23 @@
 {
+    "CN": {
+        "ServerInfoDataUrl": "https://gs-api.bluearchive-cn.com/api/state",
+        "AddressableCatalogUrl": "https://static.bluearchive-cn.com/prodm39",
+        "APKVersionName": "2.1.2",
+        "APKVersionCode": "68",
+        "TableVersion": "202511201418",
+        "MediaVersion": "202511131616",
+        "ResourceVersion": "202511181950"
+    },
     "JP": {
         "ServerInfoDataUrl": "https://yostar-serverinfo.bluearchiveyostar.com/r86_63_valo0kvoir39ti2g00u7.json",
         "AddressableCatalogUrl": "https://prod-clientpatch.bluearchiveyostar.com/r86_vm4arsjw95mxfrp4m01q_2",
-        "APKVersionCode": "384227",
         "APKVersionName": "1.63.384227",
-        "DefaultConnectionGroup": "Prod-Audit",
-        "SkipTutorial": "false",
-        "Language": "Jp",
-        "version": "1.63.384227",
-        "ConnectionGroups": [
-            {
-                "Name": "Prod-Audit",
-                "ManagementDataUrl": "https://prod-noticeindex.bluearchiveyostar.com/prod/index.json",
-                "IsProductionAddressables": true,
-                "ApiUrl": "https://prod-game.bluearchiveyostar.com:5000/api/",
-                "GatewayUrl": "https://prod-gateway.bluearchiveyostar.com:5100/api/",
-                "KibanaLogUrl": "https://prod-logcollector.bluearchiveyostar.com:5300",
-                "ProhibitedWordBlackListUri": "https://prod-notice.bluearchiveyostar.com/prod/ProhibitedWord/blacklist.csv",
-                "ProhibitedWordWhiteListUri": "https://prod-notice.bluearchiveyostar.com/prod/ProhibitedWord/whitelist.csv",
-                "CustomerServiceUrl": "https://bluearchive.jp/contact-1-hint",
-                "OverrideConnectionGroups": [
-                    {
-                        "Name": "1.0",
-                        "AddressablesCatalogUrlRoot": "https://prod-clientpatch.bluearchiveyostar.com/m28_1_0_1_mashiro3"
-                    },
-                    {
-                        "Name": "1.63",
-                        "AddressablesCatalogUrlRoot": "https://prod-clientpatch.bluearchiveyostar.com/r86_vm4arsjw95mxfrp4m01q_2"
-                    }
-                ],
-                "BundleVersion": "qtmrfsa5k8",
-                "IsLivePublished": true
-            }
-        ]
+        "APKVersionCode": "384227"
+    },
+    "GL": {
+        "ServerInfoDataUrl": "https://ba.dn.nexoncdn.co.kr/com.nexon.bluearchive/b3002bc7b6ac4ed5/resource-data.json",
+        "AddressableCatalogUrl": "https://ba.dn.nexoncdn.co.kr/com.nexon.bluearchive/b3002bc7b6ac4ed5/",
+        "APKVersionName": "1.82.378581",
+        "APKVersionCode": "378581"
     }
 }
