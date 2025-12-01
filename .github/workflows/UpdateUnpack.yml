@@ -304,7 +304,7 @@ jobs:
   Commit:
     runs-on: ubuntu-latest
     needs: [setup, Table]
-    if: always() && (contains(needs.*.result, 'success') || contains(needs.*.result, 'skipped')) && ((github.event_name == 'schedule' && fromJSON(needs.setup.outputs.run-flags)[matrix.server] == 'true') || github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch')
+    if: always() && (contains(needs.*.result, 'success') || contains(needs.*.result, 'skipped')) && (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' || (github.event_name == 'schedule' && fromJSON(needs.setup.outputs.run-flags)[fromJSON(needs.setup.outputs.matrix)[0]] == 'true'))
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -323,8 +323,13 @@ jobs:
           IFS=',' read -ra SERVER_ARRAY <<< "$SERVERS"
           
           for SERVER in "${SERVER_ARRAY[@]}"; do
-            if [ "${{ github.event_name }}" == 'schedule' ] && [ "${{ fromJSON(needs.setup.outputs.run-flags)[SERVER] }}" == 'false' ]; then
-              continue
+            if [ "${{ github.event_name }}" == 'schedule' ]; then
+              RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
+              SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
+              if [ "$SERVER_RUN_FLAG" == 'false' ]; then
+                echo "Skipping $SERVER for schedule run"
+                continue
+              fi
             fi
             
             echo "Downloading artifacts for server: $SERVER"
@@ -345,8 +350,12 @@ jobs:
           TEXT_HAS_CHANGES=false
           
           for SERVER in "${SERVER_ARRAY[@]}"; do
-            if [ "${{ github.event_name }}" == 'schedule' ] && [ "$(echo "$SETUP_FLATDATA_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')" == 'false' ]; then
-              continue
+            if [ "${{ github.event_name }}" == 'schedule' ]; then
+              SETUP_FLAG=$(echo "$SETUP_FLATDATA_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
+              if [ "$SETUP_FLAG" == 'false' ]; then
+                echo "Skipping $SERVER for schedule run (setup flag is false)"
+                continue
+              fi
             fi
             
             SERVER_VERSION=$(echo "$VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
@@ -398,8 +407,13 @@ jobs:
           VERSIONS='${{ needs.setup.outputs.versions }}'
           
           for SERVER in "${SERVER_ARRAY[@]}"; do
-            if [ "${{ github.event_name }}" == 'schedule' ] && [ "${{ fromJSON(needs.setup.outputs.run-flags)[SERVER] }}" == 'false' ]; then
-              continue
+            if [ "${{ github.event_name }}" == 'schedule' ]; then
+              RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
+              SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
+              if [ "$SERVER_RUN_FLAG" == 'false' ]; then
+                echo "Skipping $SERVER for schedule run"
+                continue
+              fi
             fi
             
             SERVER_VERSION=$(echo "$VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
@@ -432,8 +446,12 @@ jobs:
           SETUP_FLATDATA_FLAGS='${{ needs.setup.outputs.setup-flatdata-flags }}'
           
           for SERVER in "${SERVER_ARRAY[@]}"; do
-            if [ "${{ github.event_name }}" == 'schedule' ] && [ "$(echo "$SETUP_FLATDATA_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')" == 'false' ]; then
-              continue
+            if [ "${{ github.event_name }}" == 'schedule' ]; then
+              SETUP_FLAG=$(echo "$SETUP_FLATDATA_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
+              if [ "$SETUP_FLAG" == 'false' ]; then
+                echo "Skipping $SERVER for schedule run (setup flag is false)"
+                continue
+              fi
             fi
             
             SERVER_VERSION=$(echo "$VERSIONS" | jq -r --arg server "$SERVER" '.[$server]')
