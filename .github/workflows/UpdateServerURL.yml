@@ -35,8 +35,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Update server
-        run: python update_urls.py info.json
+      - name: Update jp server
+        run: python update/update_urls_jp.py info.json
+
+      - name: Update cn server
+        run: python update/update_urls_cn.py info.json
+
+      - name: Update gl server
+        run: python update/update_urls_gl.py info.json
 
       - name: Check if ba.env was modified
         run: |
@@ -61,10 +67,3 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
             -d '{"event_type": "run-deployment","client_payload": {"unpack_flatdata": true,"downloads_media": false,"run_media": true}}'
-
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "run-deployment-bundle"}'
