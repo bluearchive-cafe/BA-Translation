@@ -67,13 +67,13 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             SERVERS=()
-            if [ "${{ inputs.jp_server }}" = "true" ]; then
+            if [ "${{ github.event.inputs.jp_server }}" = "true" ]; then
               SERVERS+=("JP")
             fi
-            if [ "${{ inputs.gl_server }}" = "true" ]; then
+            if [ "${{ github.event.inputs.gl_server }}" = "true" ]; then
               SERVERS+=("GL")
             fi
-            if [ "${{ inputs.cn_server }}" = "true" ]; then
+            if [ "${{ github.event.inputs.cn_server }}" = "true" ]; then
               SERVERS+=("CN")
             fi
             
@@ -81,7 +81,6 @@ jobs:
               SERVERS=("JP")
             fi
             
-            # 确保输出正确的 JSON 数组格式
             SERVERS_JSON=$(printf '%s\n' "${SERVERS[@]}" | jq -R -n '[inputs]' | jq -c .)
           elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             CLIENT_PAYLOAD='${{ toJSON(github.event.client_payload) }}'
@@ -106,11 +105,9 @@ jobs:
           VERSIONS="{}"
           FLATDATA_VERSIONS="{}"
           
-          # 使用 jq 安全地解析 JSON 数组
           SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
           echo "Servers to process: $SERVERS"
           
-          # 如果 SERVERS 是空字符串，设置默认值
           if [ -z "$SERVERS" ]; then
             SERVERS="JP"
           fi
@@ -147,7 +144,6 @@ jobs:
           RUN_FLAGS="{}"
           SETUP_FLATDATA_FLAGS="{}"
           
-          # 安全地解析服务器列表
           SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
           if [ -z "$SERVERS" ]; then
             SERVERS="JP"
@@ -191,7 +187,6 @@ jobs:
         id: set-outputs
         run: |
           MATRIX_OUTPUT='${{ steps.determine-servers.outputs.matrix }}'
-          # 验证 matrix 输出是否为有效的 JSON
           if echo "$MATRIX_OUTPUT" | jq -e . >/dev/null 2>&1; then
             echo "matrix=$MATRIX_OUTPUT" >> $GITHUB_OUTPUT
           else
@@ -240,10 +235,10 @@ jobs:
       - name: Check if should run
         id: check-run
         run: |
-          if [ "${{ github.event_name }}" == 'schedule' ]; then
+          if [ "${{ github.event_name }}" = 'schedule' ]; then
             RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
             SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "${{ matrix.server }}" '.[$server]')
-            if [ "$SERVER_RUN_FLAG" == 'true' ]; then
+            if [ "$SERVER_RUN_FLAG" = 'true' ]; then
               echo "Should run for server ${{ matrix.server }}"
               echo "should-run=true" >> $GITHUB_OUTPUT
             else
@@ -306,10 +301,8 @@ jobs:
         id: check-flatdata-zip
         run: |
           if [ -f "BA-FlatData/${SERVER}${BA_VERSION_NAME}.zip" ]; then
-            echo "Using existing FlatData zip file"
             echo "zip-exists=true" >> $GITHUB_OUTPUT
           else
-            echo "FlatData zip file not found, will generate new one"
             echo "zip-exists=false" >> $GITHUB_OUTPUT
           fi
 
@@ -321,7 +314,6 @@ jobs:
             if [ -f "flatdata-cn/dump.cs" ]; then
               mkdir -p Dumps
               cp flatdata-cn/dump.cs Dumps/
-              echo "Copied dump.cs from CN branch to Dumps directory"
             fi
             rm -rf flatdata-cn
           fi
@@ -343,8 +335,8 @@ jobs:
         run: |
           DB_FILE="./downloads/TableBundles/ExcelDB.db"
           if [ -f "$DB_FILE" ]; then
-            if [ -n "${{ inputs.db_key }}" ] && [ "${{ inputs.db_key }}" != "" ]; then
-              KEY="${{ inputs.db_key }}"
+            if [ -n "${{ github.event.inputs.db_key }}" ] && [ "${{ github.event.inputs.db_key }}" != "" ]; then
+              KEY="${{ github.event.inputs.db_key }}"
             else
               KEY="${{ secrets.DB_DECRYPT_KEY }}"
             fi
@@ -384,10 +376,8 @@ jobs:
         id: check-text-zip
         run: |
           if [ -f "${SERVER}${BA_VERSION_NAME}.zip" ]; then
-            echo "Using existing Text zip file"
             echo "text-zip-exists=true" >> $GITHUB_OUTPUT
           else
-            echo "Text zip file not found, will generate new one"
             echo "text-zip-exists=false" >> $GITHUB_OUTPUT
           fi
 
@@ -409,10 +399,8 @@ jobs:
         id: check-catalog-zip
         run: |
           if [ -f "${SERVER}Catalog${BA_VERSION_NAME}.zip" ]; then
-            echo "Using existing Catalog zip file"
             echo "catalog-zip-exists=true" >> $GITHUB_OUTPUT
           else
-            echo "Catalog zip file not found, will generate new one"
             echo "catalog-zip-exists=false" >> $GITHUB_OUTPUT
           fi
 
@@ -454,15 +442,14 @@ jobs:
           SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
           echo "Servers JSON: $SERVERS_JSON"
           
-          # 安全地解析服务器列表
           SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
           RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
           
           while IFS= read -r SERVER; do
             if [ -n "$SERVER" ]; then
-              if [ "${{ github.event_name }}" == 'schedule' ]; then
+              if [ "${{ github.event_name }}" = 'schedule' ]; then
                 SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
-                if [ "$SERVER_RUN_FLAG" == 'false' ]; then
+                if [ "$SERVER_RUN_FLAG" = 'false' ]; then
                   echo "Skipping $SERVER for schedule run"
                   continue
                 fi
@@ -485,14 +472,13 @@ jobs:
           FLATDATA_HAS_CHANGES=false
           TEXT_HAS_CHANGES=false
           
-          # 安全地解析服务器列表
           SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
           
           while IFS= read -r SERVER; do
             if [ -n "$SERVER" ]; then
-              if [ "${{ github.event_name }}" == 'schedule' ]; then
+              if [ "${{ github.event_name }}" = 'schedule' ]; then
                 SETUP_FLAG=$(echo "$SETUP_FLATDATA_FLAGS_JSON" | jq -r --arg server "$SERVER" '.[$server]')
-                if [ "$SETUP_FLAG" == 'false' ]; then
+                if [ "$SETUP_FLAG" = 'false' ]; then
                   echo "Skipping $SERVER for schedule run (setup flag is false)"
                   continue
                 fi
@@ -508,20 +494,17 @@ jobs:
                 
                 if [ "$NEED_SETUP_FLATDATA" = "false" ]; then
                   if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" ]; then
-                    echo "Copying FlatData zip to BA-FlatData"
                     cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" "BA-FlatData/"
                     FLATDATA_HAS_CHANGES=true
                   fi
                 fi
                 
                 if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" ]; then
-                  echo "Found Text zip file for $SERVER"
                   cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" "BA-Text/"
                   TEXT_HAS_CHANGES=true
                 fi
                 
                 if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}Catalog${SERVER_VERSION}.zip" ]; then
-                  echo "Found Catalog zip file for $SERVER"
                   cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}Catalog${SERVER_VERSION}.zip" "BA-Text/"
                   TEXT_HAS_CHANGES=true
                 fi
@@ -544,15 +527,14 @@ jobs:
           SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
           VERSIONS_JSON='${{ needs.setup.outputs.versions }}'
           
-          # 安全地解析服务器列表
           SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
           RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
           
           while IFS= read -r SERVER; do
             if [ -n "$SERVER" ]; then
-              if [ "${{ github.event_name }}" == 'schedule' ]; then
+              if [ "${{ github.event_name }}" = 'schedule' ]; then
                 SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
-                if [ "$SERVER_RUN_FLAG" == 'false' ]; then
+                if [ "$SERVER_RUN_FLAG" = 'false' ]; then
                   echo "Skipping $SERVER for schedule run"
                   continue
                 fi
@@ -586,14 +568,13 @@ jobs:
           VERSIONS_JSON='${{ needs.setup.outputs.versions }}'
           SETUP_FLATDATA_FLAGS_JSON='${{ needs.setup.outputs.setup-flatdata-flags }}'
           
-          # 安全地解析服务器列表
           SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
           
           while IFS= read -r SERVER; do
             if [ -n "$SERVER" ]; then
-              if [ "${{ github.event_name }}" == 'schedule' ]; then
+              if [ "${{ github.event_name }}" = 'schedule' ]; then
                 SETUP_FLAG=$(echo "$SETUP_FLATDATA_FLAGS_JSON" | jq -r --arg server "$SERVER" '.[$server]')
-                if [ "$SETUP_FLAG" == 'false' ]; then
+                if [ "$SETUP_FLAG" = 'false' ]; then
                   echo "Skipping $SERVER for schedule run (setup flag is false)"
                   continue
                 fi
