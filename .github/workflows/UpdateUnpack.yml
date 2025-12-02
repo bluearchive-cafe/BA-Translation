@@ -66,7 +66,6 @@ jobs:
         id: determine-servers
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 处理单选开关输入
             SERVERS=()
             if [ "${{ inputs.jp_server }}" = "true" ]; then
               SERVERS+=("JP")
@@ -78,115 +77,113 @@ jobs:
               SERVERS+=("CN")
             fi
             
-            # 如果没有选择任何服务器，默认使用 JP
             if [ ${#SERVERS[@]} -eq 0 ]; then
               SERVERS=("JP")
             fi
             
-            SERVERS_RAW=$(printf '%s\n' "${SERVERS[@]}" | jq -R . | jq -s .)
+            SERVERS_JSON=$(echo -n "${SERVERS[@]}" | jq -R -s -c 'split(" ")')
           elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            SERVERS_RAW='${{ toJSON(github.event.client_payload.servers) || '["JP"]' }}'
+            CLIENT_PAYLOAD='${{ toJSON(github.event.client_payload) }}'
+            if [ "$CLIENT_PAYLOAD" != "null" ] && [ -n "$CLIENT_PAYLOAD" ]; then
+              SERVERS_JSON=$(echo "$CLIENT_PAYLOAD" | jq -c '.servers // ["JP"]')
+            else
+              SERVERS_JSON='["JP"]'
+            fi
           else
-            SERVERS_RAW='["JP"]'
+            SERVERS_JSON='["JP"]'
           fi
-          echo "SERVERS_RAW=$SERVERS_RAW" >> $GITHUB_OUTPUT
-          echo "Selected servers: $SERVERS_RAW"
+          
+          echo "matrix=$SERVERS_JSON" >> $GITHUB_OUTPUT
+          echo "SERVERS_JSON=$SERVERS_JSON" >> $GITHUB_OUTPUT
 
       - name: Get version information
         id: get-versions
         run: |
-          SERVERS_RAW='${{ steps.determine-servers.outputs.SERVERS_RAW }}'
-          echo "SERVERS_RAW value: $SERVERS_RAW"
-          
-          # 使用 jq 安全地解析数组
-          SERVERS=$(echo "$SERVERS_RAW" | jq -r '.[]' 2>/dev/null || echo "JP")
+          SERVERS_JSON='${{ steps.determine-servers.outputs.SERVERS_JSON }}'
+          echo "SERVERS_JSON: $SERVERS_JSON"
           
           VERSIONS="{}"
           FLATDATA_VERSIONS="{}"
           
-          # 处理单个或多个服务器
-          if echo "$SERVERS" | grep -q " "; then
-            # 多个服务器
-            while IFS= read -r SERVER; do
-              if [ -n "$SERVER" ]; then
-                VERSION=$(bash version.sh "$SERVER" info.json 2>/dev/null | grep BA_VERSION_NAME | cut -d= -f2 || echo "")
-                FLATDATA_VERSION=$(bash version.sh "$SERVER" info.json 2>/dev/null | grep FLATDATA_VERSION_NAME | cut -d= -f2 || echo "")
+          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]')
+          echo "Servers to process: $SERVERS"
+          
+          while IFS= read -r SERVER; do
+            if [ -n "$SERVER" ]; then
+              echo "Processing server: $SERVER"
+              
+              VERSION_INFO=$(bash version.sh "$SERVER" info.json 2>/dev/null || echo "")
+              if [ -n "$VERSION_INFO" ]; then
+                BA_VERSION=$(echo "$VERSION_INFO" | grep "BA_VERSION_NAME=" | cut -d= -f2)
+                FLATDATA_VERSION=$(echo "$VERSION_INFO" | grep "FLATDATA_VERSION_NAME=" | cut -d= -f2)
                 
-                if [ -n "$VERSION" ]; then
-                  VERSIONS=$(echo "$VERSIONS" | jq --arg server "$SERVER" --arg version "$VERSION" '. + {($server): $version}')
+                if [ -n "$BA_VERSION" ]; then
+                  VERSIONS=$(echo "$VERSIONS" | jq --arg server "$SERVER" --arg version "$BA_VERSION" '. + {($server): $version}')
                 fi
                 if [ -n "$FLATDATA_VERSION" ]; then
                   FLATDATA_VERSIONS=$(echo "$FLATDATA_VERSIONS" | jq --arg server "$SERVER" --arg version "$FLATDATA_VERSION" '. + {($server): $version}')
                 fi
               fi
-            done <<< "$SERVERS"
-          else
-            # 单个服务器
-            SERVER="$SERVERS"
-            VERSION=$(bash version.sh "$SERVER" info.json 2>/dev/null | grep BA_VERSION_NAME | cut -d= -f2 || echo "")
-            FLATDATA_VERSION=$(bash version.sh "$SERVER" info.json 2>/dev/null | grep FLATDATA_VERSION_NAME | cut -d= -f2 || echo "")
-            
-            if [ -n "$VERSION" ]; then
-              VERSIONS=$(echo "$VERSIONS" | jq --arg server "$SERVER" --arg version "$VERSION" '. + {($server): $version}')
             fi
-            if [ -n "$FLATDATA_VERSION" ]; then
-              FLATDATA_VERSIONS=$(echo "$FLATDATA_VERSIONS" | jq --arg server "$SERVER" --arg version "$FLATDATA_VERSION" '. + {($server): $version}')
-            fi
-          fi
+          done <<< "$SERVERS"
           
-          echo "VERSIONS=$VERSIONS" >> $GITHUB_OUTPUT
-          echo "FLATDATA_VERSIONS=$FLATDATA_VERSIONS" >> $GITHUB_OUTPUT
-          echo "Versions: $VERSIONS"
-          echo "FlatData versions: $FLATDATA_VERSIONS"
+          echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
+          echo "flatdata-versions=$FLATDATA_VERSIONS" >> $GITHUB_OUTPUT
 
       - name: Check existing files
         id: check-files
         run: |
-          SERVERS_RAW='${{ steps.determine-servers.outputs.SERVERS_RAW }}'
-          echo "SERVERS_RAW: $SERVERS_RAW"
-          
-          SERVERS=$(echo "$SERVERS_RAW" | jq -r '.[]' 2>/dev/null || echo "JP")
-          echo "Servers: $SERVERS"
-          
-          VERSIONS='${{ steps.get-versions.outputs.VERSIONS }}'
-          FLATDATA_VERSIONS='${{ steps.get-versions.outputs.FLATDATA_VERSIONS }}'
+          SERVERS_JSON='${{ steps.determine-servers.outputs.SERVERS_JSON }}'
+          VERSIONS_JSON='${{ steps.get-versions.outputs.versions }}'
+          FLATDATA_VERSIONS_JSON='${{ steps.get-versions.outputs.flatdata-versions }}'
           
           RUN_FLAGS="{}"
           SETUP_FLATDATA_FLAGS="{}"
           
-          # 处理单个或多个服务器
-          if echo "$SERVERS" | grep -q " "; then
-            while IFS= read -r SERVER; do
-              if [ -n "$SERVER" ]; then
-                process_server "$SERVER"
+          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]')
+          
+          while IFS= read -r SERVER; do
+            if [ -n "$SERVER" ]; then
+              SERVER_VERSION=$(echo "$VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
+              SERVER_FLATDATA_VERSION=$(echo "$FLATDATA_VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
+              
+              git clone --depth 1 --branch "$SERVER" "https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git" "flatdata-check-$SERVER" || FLATDATA_EXISTS="false"
+              
+              if [ -f "flatdata-check-${SERVER}/${SERVER}${SERVER_FLATDATA_VERSION}.zip" ]; then
+                FLATDATA_EXISTS="true"
+              else
+                FLATDATA_EXISTS="false"
               fi
-            done <<< "$SERVERS"
-          else
-            process_server "$SERVERS"
-          fi
+              rm -rf "flatdata-check-${SERVER}"
+              
+              if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+                RUN_FLAGS=$(echo "$RUN_FLAGS" | jq -c --arg server "$SERVER" '. + {($server): "true"}')
+                SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq -c --arg server "$SERVER" --arg flag "$FLATDATA_EXISTS" '. + {($server): $flag}')
+              else
+                git clone --depth 1 "https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git" ba-text-check
+                if [ -f "ba-text-check/${SERVER}${SERVER_VERSION}.zip" ]; then
+                  RUN_FLAGS=$(echo "$RUN_FLAGS" | jq -c --arg server "$SERVER" '. + {($server): "false"}')
+                  SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq -c --arg server "$SERVER" --arg flag "true" '. + {($server): $flag}')
+                else
+                  RUN_FLAGS=$(echo "$RUN_FLAGS" | jq -c --arg server "$SERVER" '. + {($server): "true"}')
+                  SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq -c --arg server "$SERVER" --arg flag "$FLATDATA_EXISTS" '. + {($server): $flag}')
+                fi
+                rm -rf ba-text-check
+              fi
+            fi
+          done <<< "$SERVERS"
           
-          echo "RUN_FLAGS=$RUN_FLAGS" >> $GITHUB_OUTPUT
-          echo "SETUP_FLATDATA_FLAGS=$SETUP_FLATDATA_FLAGS" >> $GITHUB_OUTPUT
-          
-        env:
-          RUN_FLAGS: ${{ steps.get-versions.outputs.RUN_FLAGS }}
-          SETUP_FLATDATA_FLAGS: ${{ steps.get-versions.outputs.SETUP_FLATDATA_FLAGS }}
+          echo "run-flags=$RUN_FLAGS" >> $GITHUB_OUTPUT
+          echo "setup-flatdata-flags=$SETUP_FLATDATA_FLAGS" >> $GITHUB_OUTPUT
 
       - name: Set final outputs
         id: set-outputs
         run: |
-          MATRIX='${{ steps.determine-servers.outputs.SERVERS_RAW }}'
-          # 验证 MATRIX 是有效的 JSON 数组
-          if ! echo "$MATRIX" | jq -e . >/dev/null 2>&1; then
-            echo "Invalid MATRIX format, defaulting to [\"JP\"]"
-            MATRIX='["JP"]'
-          fi
-          
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
-          echo "versions=${{ steps.get-versions.outputs.VERSIONS }}" >> $GITHUB_OUTPUT
-          echo "flatdata-versions=${{ steps.get-versions.outputs.FLATDATA_VERSIONS }}" >> $GITHUB_OUTPUT
-          echo "run-flags=${{ steps.check-files.outputs.RUN_FLAGS }}" >> $GITHUB_OUTPUT
-          echo "setup-flatdata-flags=${{ steps.check-files.outputs.SETUP_FLATDATA_FLAGS }}" >> $GITHUB_OUTPUT
+          echo "matrix=${{ steps.determine-servers.outputs.matrix }}" >> $GITHUB_OUTPUT
+          echo "versions=${{ steps.get-versions.outputs.versions }}" >> $GITHUB_OUTPUT
+          echo "flatdata-versions=${{ steps.get-versions.outputs.flatdata-versions }}" >> $GITHUB_OUTPUT
+          echo "run-flags=${{ steps.check-files.outputs.run-flags }}" >> $GITHUB_OUTPUT
+          echo "setup-flatdata-flags=${{ steps.check-files.outputs.setup-flatdata-flags }}" >> $GITHUB_OUTPUT
 
   Table:
     runs-on: ubuntu-latest
@@ -305,7 +302,6 @@ jobs:
         run: |
           DB_FILE="./downloads/TableBundles/ExcelDB.db"
           if [ -f "$DB_FILE" ]; then
-            # 修复：安全地处理 db_key
             if [ -n "${{ inputs.db_key }}" ] && [ "${{ inputs.db_key }}" != "" ]; then
               KEY="${{ inputs.db_key }}"
             else
@@ -413,62 +409,82 @@ jobs:
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git
 
       - name: Download all artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const servers = ${{ needs.setup.outputs.matrix }};
-            const runFlags = ${{ needs.setup.outputs.run-flags }};
-            
-            for (const server of servers) {
-              // 检查计划任务是否需要运行
-              if (process.env.GITHUB_EVENT_NAME === 'schedule') {
-                const shouldRun = runFlags[server];
-                if (!shouldRun) {
-                  console.log(`Skipping ${server} for schedule run`);
-                  continue;
-                }
-              }
+        run: |
+          SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
+          echo "Servers JSON: $SERVERS_JSON"
+          
+          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]')
+          RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
+          
+          while IFS= read -r SERVER; do
+            if [ -n "$SERVER" ]; then
+              if [ "${{ github.event_name }}" == 'schedule' ]; then
+                SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
+                if [ "$SERVER_RUN_FLAG" == 'false' ]; then
+                  echo "Skipping $SERVER for schedule run"
+                  continue
+                fi
+              fi
               
-              try {
-                // 下载制品
-                const result = await github.rest.actions.downloadArtifact({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  artifact_name: `table-changes-${server}`,
-                  archive_format: 'zip'
-                });
-                console.log(`Downloaded artifacts for ${server}`);
-              } catch (error) {
-                console.log(`No artifacts found for ${server}`);
-              }
-            }
+              echo "Downloading artifacts for server: $SERVER"
+              mkdir -p artifacts/$SERVER
+              
+              gh run download --repo $GITHUB_REPOSITORY --name table-changes-$SERVER --dir artifacts/$SERVER || echo "No artifacts found for $SERVER"
+            fi
+          done <<< "$SERVERS"
 
       - name: Process and merge artifacts
         run: |
-          SERVERS_RAW='${{ needs.setup.outputs.matrix }}'
-          echo "Raw servers: $SERVERS_RAW"
-          
-          # 安全地解析服务器数组
-          SERVERS=$(echo "$SERVERS_RAW" | jq -r '.[]' 2>/dev/null || echo "JP")
-          echo "Parsed servers: $SERVERS"
-          
-          VERSIONS='${{ needs.setup.outputs.versions }}'
-          FLATDATA_VERSIONS='${{ needs.setup.outputs.flatdata-versions }}'
-          SETUP_FLATDATA_FLAGS='${{ needs.setup.outputs.setup-flatdata-flags }}'
+          SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
+          VERSIONS_JSON='${{ needs.setup.outputs.versions }}'
+          FLATDATA_VERSIONS_JSON='${{ needs.setup.outputs.flatdata-versions }}'
+          SETUP_FLATDATA_FLAGS_JSON='${{ needs.setup.outputs.setup-flatdata-flags }}'
           
           FLATDATA_HAS_CHANGES=false
           TEXT_HAS_CHANGES=false
           
-          # 处理服务器数组
-          if echo "$SERVERS" | grep -q " "; then
-            while IFS= read -r SERVER; do
-              if [ -n "$SERVER" ]; then
-                process_server_artifacts "$SERVER"
+          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]')
+          
+          while IFS= read -r SERVER; do
+            if [ -n "$SERVER" ]; then
+              if [ "${{ github.event_name }}" == 'schedule' ]; then
+                SETUP_FLAG=$(echo "$SETUP_FLATDATA_FLAGS_JSON" | jq -r --arg server "$SERVER" '.[$server]')
+                if [ "$SETUP_FLAG" == 'false' ]; then
+                  echo "Skipping $SERVER for schedule run (setup flag is false)"
+                  continue
+                fi
               fi
-            done <<< "$SERVERS"
-          else
-            process_server_artifacts "$SERVERS"
-          fi
+              
+              SERVER_VERSION=$(echo "$VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
+              NEED_SETUP_FLATDATA=$(echo "$SETUP_FLATDATA_FLAGS_JSON" | jq -r --arg server "$SERVER" '.[$server]')
+              
+              echo "Processing server: $SERVER, Version: $SERVER_VERSION"
+              
+              if [ -d "artifacts/$SERVER/temp_flatdata_output" ]; then
+                echo "Found artifacts for $SERVER"
+                
+                if [ "$NEED_SETUP_FLATDATA" = "false" ]; then
+                  if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" ]; then
+                    echo "Copying FlatData zip to BA-FlatData"
+                    cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" "BA-FlatData/"
+                    FLATDATA_HAS_CHANGES=true
+                  fi
+                fi
+                
+                if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" ]; then
+                  echo "Found Text zip file for $SERVER"
+                  cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" "BA-Text/"
+                  TEXT_HAS_CHANGES=true
+                fi
+                
+                if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}Catalog${SERVER_VERSION}.zip" ]; then
+                  echo "Found Catalog zip file for $SERVER"
+                  cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}Catalog${SERVER_VERSION}.zip" "BA-Text/"
+                  TEXT_HAS_CHANGES=true
+                fi
+              fi
+            fi
+          done <<< "$SERVERS"
           
           echo "FLATDATA_HAS_CHANGES=$FLATDATA_HAS_CHANGES" >> $GITHUB_ENV
           echo "TEXT_HAS_CHANGES=$TEXT_HAS_CHANGES" >> $GITHUB_ENV
@@ -482,41 +498,80 @@ jobs:
         if: env.TEXT_HAS_CHANGES == 'true'
         run: |
           cd BA-Text
-          SERVERS_RAW='${{ needs.setup.outputs.matrix }}'
-          SERVERS=$(echo "$SERVERS_RAW" | jq -r '.[]' 2>/dev/null || echo "JP")
-          VERSIONS='${{ needs.setup.outputs.versions }}'
+          SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
+          VERSIONS_JSON='${{ needs.setup.outputs.versions }}'
           
-          # 处理提交
-          if echo "$SERVERS" | grep -q " "; then
-            while IFS= read -r SERVER; do
-              if [ -n "$SERVER" ]; then
-                commit_to_branch "$SERVER"
+          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]')
+          RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
+          
+          while IFS= read -r SERVER; do
+            if [ -n "$SERVER" ]; then
+              if [ "${{ github.event_name }}" == 'schedule' ]; then
+                SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
+                if [ "$SERVER_RUN_FLAG" == 'false' ]; then
+                  echo "Skipping $SERVER for schedule run"
+                  continue
+                fi
               fi
-            done <<< "$SERVERS"
-          else
-            commit_to_branch "$SERVERS"
-          fi
+              
+              SERVER_VERSION=$(echo "$VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
+              
+              if git show-ref --quiet refs/heads/$SERVER; then
+                git checkout $SERVER
+              else
+                git checkout -b $SERVER
+              fi
+              
+              git add .
+              if ! git diff --staged --quiet; then
+                git commit -m "Update $SERVER Text files - version $SERVER_VERSION"
+                git push origin $SERVER
+                echo "BA-Text $SERVER branch committed"
+              else
+                echo "BA-Text $SERVER branch no changes to commit"
+              fi
+            fi
+          done <<< "$SERVERS"
           cd ..
 
       - name: Commit to BA-FlatData
         if: env.FLATDATA_HAS_CHANGES == 'true'
         run: |
           cd BA-FlatData
-          SERVERS_RAW='${{ needs.setup.outputs.matrix }}'
-          SERVERS=$(echo "$SERVERS_RAW" | jq -r '.[]' 2>/dev/null || echo "JP")
-          VERSIONS='${{ needs.setup.outputs.versions }}'
-          SETUP_FLATDATA_FLAGS='${{ needs.setup.outputs.setup-flatdata-flags }}'
+          SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
+          VERSIONS_JSON='${{ needs.setup.outputs.versions }}'
+          SETUP_FLATDATA_FLAGS_JSON='${{ needs.setup.outputs.setup-flatdata-flags }}'
           
-          # 处理提交
-          if echo "$SERVERS" | grep -q " "; then
-            while IFS= read -r SERVER; do
-              if [ -n "$SERVER" ]; then
-                commit_to_branch "$SERVER"
+          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]')
+          
+          while IFS= read -r SERVER; do
+            if [ -n "$SERVER" ]; then
+              if [ "${{ github.event_name }}" == 'schedule' ]; then
+                SETUP_FLAG=$(echo "$SETUP_FLATDATA_FLAGS_JSON" | jq -r --arg server "$SERVER" '.[$server]')
+                if [ "$SETUP_FLAG" == 'false' ]; then
+                  echo "Skipping $SERVER for schedule run (setup flag is false)"
+                  continue
+                fi
               fi
-            done <<< "$SERVERS"
-          else
-            commit_to_branch "$SERVERS"
-          fi
+              
+              SERVER_VERSION=$(echo "$VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
+              
+              if git show-ref --quiet refs/heads/$SERVER; then
+                git checkout $SERVER
+              else
+                git checkout -b $SERVER
+              fi
+              
+              git add .
+              if ! git diff --staged --quiet; then
+                git commit -m "Update $SERVER FlatData - version $SERVER_VERSION"
+                git push origin $SERVER
+                echo "BA-FlatData $SERVER branch committed"
+              else
+                echo "BA-FlatData $SERVER branch no changes to commit"
+              fi
+            fi
+          done <<< "$SERVERS"
           cd ..
 
       - name: Cleanup
