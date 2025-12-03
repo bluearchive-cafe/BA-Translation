@@ -113,7 +113,7 @@ jobs:
           git add .
 
           git commit -m "Extract text for version ${{ steps.new_ver.outputs.BA_VERSION_NAME }} (from ${{ steps.prev_ver.outputs.BA_VERSION_NAME }})"
-          git push origin
+          git push origin JP
 
       - name: Deploy Translation
         run: |
