@@ -53,7 +53,7 @@ jobs:
           echo "Current info.json content:"
           cat info.json
           echo "Running version.sh on current info.json:"
-          bash version.sh info.json >> "$GITHUB_OUTPUT"
+          bash version.sh JP info.json >> "$GITHUB_OUTPUT"
 
       - name: Find last meaningful change in info.json
         id: prev_ver
@@ -81,8 +81,7 @@ jobs:
           cat /tmp/prev_info.json
           
           echo "Running version.sh on previous info.json:"
-          bash version.sh /tmp/prev_info.json
-          bash version.sh /tmp/prev_info.json >> "$GITHUB_OUTPUT"
+          bash version.sh JP /tmp/prev_info.json >> "$GITHUB_OUTPUT"
           echo "prev_commit=$PREV_COMMIT" >> "$GITHUB_OUTPUT"
 
       - name: Check version
