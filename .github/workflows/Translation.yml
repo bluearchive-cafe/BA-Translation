@@ -50,13 +50,13 @@ jobs:
 
       - name: Clone repositories
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Tools.git
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git
 
       - name: Move contents to current directory
         run: |
-          mv BA-Tools/* .
-          rm -rf BA-Tools
+          mv BA-Unpack/* .
+          rm -rf BA-Unpack
 
       - name: Run translation
         env:
@@ -67,7 +67,7 @@ jobs:
           BATCH_SIZE="${{ github.event.client_payload.batch_size || inputs.batch_size }}"
           MAX_WORKERS="${{ github.event.client_payload.max_workers || inputs.max_workers }}"
           
-          python translation.py "$FILE_PATH" translation_noun.txt "$OUTPUT_PATH" config.json "$BATCH_SIZE" "$MAX_WORKERS"
+          python tools/translation.py "$FILE_PATH" other/translation_noun.txt "$OUTPUT_PATH" other/config.json "$BATCH_SIZE" "$MAX_WORKERS"
 
       - name: Commit translation files
         run: |

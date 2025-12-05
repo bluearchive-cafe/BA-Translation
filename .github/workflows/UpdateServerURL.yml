@@ -36,13 +36,13 @@ jobs:
           pip install -r requirements.txt
 
       - name: Update jp server
-        run: python update_urls_jp.py info.json
+        run: python -m update.update_urls_jp info.json
 
       - name: Update cn server
-        run: python update_urls_cn.py info.json
+        run: python -m update.update_urls_cn info.json
 
       - name: Update gl server
-        run: python update_urls_gl.py info.json
+        run: python -m update.update_urls_gl info.json
 
       - name: Check if info.json was modified
         run: |

@@ -1,4 +1,4 @@
-name: Tools-Check Repository Changes
+name: Tools-Check Changes
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ jobs:
     outputs:
       skip_processing: ${{ steps.check_skip.outputs.skip_processing }}
       has_changes: ${{ steps.check_changes.outputs.has_changes }}
-    steps:
+    steps:# 这里是自动运行用来查汉化组是否提交文件的，本人不在线时也可以进行提交操作
       - name: Checkout target repository
         uses: actions/checkout@v4
         with:
@@ -42,7 +42,7 @@ jobs:
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
 
-  process-repository:
+  repository:
     runs-on: ubuntu-latest
     needs: check-changes
     if: needs.check-changes.outputs.skip_processing != 'true' && needs.check-changes.outputs.has_changes == 'true'
@@ -67,14 +67,11 @@ jobs:
 
       - name: Clone repositories
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Tools.git BA-Tools
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BA-Unpack.git BA-Unpack
 
       - name: Move contents to current directory
         run: |
-          mv BA-Tools/* .
-          rm -rf BA-Tools
           mv BA-Unpack/* .
           rm -rf BA-Unpack
 
@@ -94,18 +91,18 @@ jobs:
           echo "Current info.json content:"
           cat info.json
           echo "Running version.sh on current info.json:"
-          bash version.sh JP info.json >> "$GITHUB_OUTPUT"
+          bash other/version.sh JP info.json >> "$GITHUB_OUTPUT"
 
       - name: Run update
         run: |
           git clone --depth 1 git@github.com:asfu222/beicheng.git beicheng
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text-Translation.git BA-Text-Translation
 
-          python clean.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" config.json "临时.zip"
-          python update.py "临时.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
-          python back.py config.json "BA-Text-Translation"
-          python re_extract.py "BA-Text-Translation" "BA-Text-Translation/日服备份.zip" config.json 10
-          python format.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
+          python tools/clean.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" other/config.json "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
+          python tools/update.py "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
+          python tools/back.py other/config.json "BA-Text-Translation"
+          python tools/re_extract.py "BA-Text-Translation" "BA-Text-Translation/日服备份.zip" other/config.json 10
+          python tools/format.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
 
       - name: Commit files Translation
         run: |
