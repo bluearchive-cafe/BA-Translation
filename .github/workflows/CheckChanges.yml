@@ -9,7 +9,7 @@ jobs:
     outputs:
       skip_processing: ${{ steps.check_skip.outputs.skip_processing }}
       has_changes: ${{ steps.check_changes.outputs.has_changes }}
-    steps:# 这里是自动运行用来查汉化组是否提交文件的，本人不在线时也可以进行提交操作
+    steps:
       - name: Checkout target repository
         uses: actions/checkout@v4
         with:
