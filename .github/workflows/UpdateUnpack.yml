@@ -3,17 +3,17 @@ name: Unpack-Update Table
 on:
   workflow_dispatch:
     inputs:
-      JP_server:
+      JP_Enabled:
         description: 'Enable JP server'
         required: false
         type: boolean
         default: false
-      GL_server:
+      GL_Enabled:
         description: 'Enable GL server'
         required: false
         type: boolean
         default: false
-      CN_server:
+      CN_Enabled:
         description: 'Enable CN server'
         required: false
         type: boolean
@@ -30,81 +30,15 @@ permissions:
   contents: write
 
 jobs:
-  check-versions:
-    runs-on: ubuntu-latest
-    outputs:
-      JP-should-run: ${{ steps.check-JP.outputs.should-run }}
-      GL-should-run: ${{ steps.check-GL.outputs.should-run }}
-      CN-should-run: ${{ steps.check-CN.outputs.should-run }}
-      JP-version: ${{ steps.get-JP-version.outputs.BA_VERSION_NAME }}
-      GL-version: ${{ steps.get-GL-version.outputs.BA_VERSION_NAME }}
-      CN-version: ${{ steps.get-CN-version.outputs.BA_VERSION_NAME }}
-    strategy:
-      matrix:
-        server: [JP, GL, CN]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-
-      - name: Clone repository
-        run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
-
-      - name: Move contents to current directory
-        run: |
-          mv BlueArchive-Translation/* .
-          rm -rf BlueArchive-Translation
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Install requirements
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Get version for ${{ matrix.server }}
-        id: get-${{ matrix.server }}-version
-        run: |
-          if [ -f "info_${{ matrix.server }}.json" ]; then
-            bash other/version.sh ${{ matrix.server }} info.json >> "$GITHUB_OUTPUT"
-          else
-            echo "BA_VERSION_NAME=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check BA-Text repository for ${{ matrix.server }} version file
-        id: check-${{ matrix.server }}
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "Manual trigger, skip version check for ${{ matrix.server }}"
-            echo "should-run=true" >> $GITHUB_OUTPUT
-          else
-            VERSION="${{ steps.get-${{ matrix.server }}-version.outputs.BA_VERSION_NAME }}"
-            git clone --depth 1 --branch ${{{ matrix.server }}} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-check-${{ matrix.server }}
-            if [ -f "ba-text-check-${{ matrix.server }}/${{ matrix.server }}${VERSION}.zip" ]; then
-              echo "Found version $VERSION file for ${{ matrix.server }}, skip"
-              echo "should-run=false" >> $GITHUB_OUTPUT
-            else
-              echo "No version $VERSION file found for ${{ matrix.server }}, continue"
-              echo "should-run=true" >> $GITHUB_OUTPUT
-            fi
-            rm -rf ba-text-check-${{ matrix.server }}
-          fi
-          
   setup:
     runs-on: ubuntu-latest
-    needs: check-versions
     outputs:
       JP-enabled: ${{ steps.detect-servers.outputs.JP-enabled }}
       GL-enabled: ${{ steps.detect-servers.outputs.GL-enabled }}
       CN-enabled: ${{ steps.detect-servers.outputs.CN-enabled }}
-      JP-version: ${{ needs.check-versions.outputs.JP-version }}
-      GL-version: ${{ needs.check-versions.outputs.GL-version }}
-      CN-version: ${{ needs.check-versions.outputs.CN-version }}
+      JP-version: ${{ steps.get-JP-version.outputs.BA_VERSION_NAME }}
+      GL-version: ${{ steps.get-GL-version.outputs.BA_VERSION_NAME }}
+      CN-version: ${{ steps.get-CN-version.outputs.BA_VERSION_NAME }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -113,10 +47,7 @@ jobs:
 
       - name: Clone repository
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
-
-      - name: Move contents to current directory
-        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
           mv BlueArchive-Translation/* .
           rm -rf BlueArchive-Translation
 
@@ -129,229 +60,446 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Get JP version
+        id: get-JP-version
+        run: |
+          if [ -f "info_JP.json" ]; then
+            bash other/version.sh JP info.json >> "$GITHUB_OUTPUT"
+          else
+            echo "BA_VERSION_NAME=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get GL version
+        id: get-GL-version
+        run: |
+          if [ -f "info_GL.json" ]; then
+            bash other/version.sh GL info.json >> "$GITHUB_OUTPUT"
+          else
+            echo "BA_VERSION_NAME=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get CN version
+        id: get-CN-version
+        run: |
+          if [ -f "info_CN.json" ]; then
+            bash other/version.sh CN info.json >> "$GITHUB_OUTPUT"
+          else
+            echo "BA_VERSION_NAME=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Detect enabled servers
         id: detect-servers
         run: |
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             JP_ENABLED="${{ github.event.client_payload.JP_enabled }}"
-            GL_ENABLED="${{ github.event.client_payload.GL_enabled  }}"
-            CN_ENABLED="${{ github.event.client_payload.CN_enabled  }}"
+            GL_ENABLED="${{ github.event.client_payload.GL_enabled }}"
+            CN_ENABLED="${{ github.event.client_payload.CN_enabled }}"
           elif [ "${{ github.event_name }}" = "schedule" ]; then
             JP_ENABLED="true"
             GL_ENABLED="true"
             CN_ENABLED="true"
           else
             JP_ENABLED="${{ inputs.JP_Enabled }}"
-            GL_ENABLED="${{ inputs.GL_Enabled  }}"
-            CN_ENABLED="${{ inputs.CN_Enabled  }}"
+            GL_ENABLED="${{ inputs.GL_Enabled }}"
+            CN_ENABLED="${{ inputs.CN_Enabled }}"
           fi
           
           echo "JP-enabled=$JP_ENABLED" >> $GITHUB_OUTPUT
           echo "GL-enabled=$GL_ENABLED" >> $GITHUB_OUTPUT
           echo "CN-enabled=$CN_ENABLED" >> $GITHUB_OUTPUT
 
-  table:
+  check-versions-jp:
     runs-on: ubuntu-latest
     needs: setup
-    strategy:
-      matrix:
-        server: [JP, GL, CN]
+    if: needs.setup.outputs.JP-enabled == 'true'
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
     steps:
-      - name: Check server enabled
-        id: check-enabled
-        run: |
-          SERVER_ENABLED="${{ needs.setup.outputs.${{ matrix.server }}-enabled }}"
-          SERVER_SHOULD_RUN="${{ needs.check-versions.outputs.${{ matrix.server }}-should-run }}"
-          
-          if [ "$SERVER_ENABLED" = "true" ] && [ "$SERVER_SHOULD_RUN" = "true" ]; then
-            echo "server-enabled=true" >> $GITHUB_OUTPUT
-          else
-            echo "server-enabled=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Checkout code
-        if: steps.check-enabled.outputs.server-enabled == 'true'
         uses: actions/checkout@v4
         with:
           submodules: false
 
       - name: Clone repository
-        if: steps.check-enabled.outputs.server-enabled == 'true'
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
 
-      - name: Move contents to current directory
-        if: steps.check-enabled.outputs.server-enabled == 'true'
+      - name: Check BA-Text repository for JP version file
+        id: check
         run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "Manual trigger, skip version check for JP"
+            echo "should-run=true" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ needs.setup.outputs.JP-version }}"
+            if [ -n "$VERSION" ]; then
+              git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-check
+              if [ -f "ba-text-check/JP${VERSION}.zip" ]; then
+                echo "Found version $VERSION file for JP, skip"
+                echo "should-run=false" >> $GITHUB_OUTPUT
+              else
+                echo "No version $VERSION file found for JP, continue"
+                echo "should-run=true" >> $GITHUB_OUTPUT
+              fi
+              rm -rf ba-text-check
+            else
+              echo "No version found for JP, continue"
+              echo "should-run=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  check-versions-gl:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.GL-enabled == 'true'
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
+
+      - name: Check BA-Text repository for GL version file
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "Manual trigger, skip version check for GL"
+            echo "should-run=true" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ needs.setup.outputs.GL-version }}"
+            if [ -n "$VERSION" ]; then
+              git clone --depth 1 --branch GL https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-check
+              if [ -f "ba-text-check/GL${VERSION}.zip" ]; then
+                echo "Found version $VERSION file for GL, skip"
+                echo "should-run=false" >> $GITHUB_OUTPUT
+              else
+                echo "No version $VERSION file found for GL, continue"
+                echo "should-run=true" >> $GITHUB_OUTPUT
+              fi
+              rm -rf ba-text-check
+            else
+              echo "No version found for GL, continue"
+              echo "should-run=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  check-versions-cn:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.CN-enabled == 'true'
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
+
+      - name: Check BA-Text repository for CN version file
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "Manual trigger, skip version check for CN"
+            echo "should-run=true" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ needs.setup.outputs.CN-version }}"
+            if [ -n "$VERSION" ]; then
+              git clone --depth 1 --branch CN https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-check
+              if [ -f "ba-text-check/CN${VERSION}.zip" ]; then
+                echo "Found version $VERSION file for CN, skip"
+                echo "should-run=false" >> $GITHUB_OUTPUT
+              else
+                echo "No version $VERSION file found for CN, continue"
+                echo "should-run=true" >> $GITHUB_OUTPUT
+              fi
+              rm -rf ba-text-check
+            else
+              echo "No version found for CN, continue"
+              echo "should-run=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  table-jp:
+    runs-on: ubuntu-latest
+    needs: [setup, check-versions-jp]
+    if: needs.setup.outputs.JP-enabled == 'true' && needs.check-versions-jp.outputs.should-run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
           mv BlueArchive-Translation/* .
           rm -rf BlueArchive-Translation
 
       - name: Set up Python 3.13
-        if: steps.check-enabled.outputs.server-enabled == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
       - name: Install requirements
-        if: steps.check-enabled.outputs.server-enabled == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Get version for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
-        run: |
-          echo "BA_VERSION_NAME=${{ needs.setup.outputs.${{ matrix.server }}-version }}" >> $GITHUB_ENV
+      - name: Set version
+        run: echo "BA_VERSION_NAME=${{ needs.setup.outputs.JP-version }}" >> $GITHUB_ENV
 
-      - name: Clone BA-FlatData for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
+      - name: Clone repositories
         run: |
-          git clone --depth 1 --branch ${{ matrix.server }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
+          git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
+          git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
 
       - name: Make workspace
-        if: steps.check-enabled.outputs.server-enabled == 'true'
-        run: |
-          mkdir -p workspace
+        run: mkdir -p workspace
 
-      - name: Get CN dump.cs
-        if: steps.check-enabled.outputs.server-enabled == 'true' && {{ matrix.server }} == 'CN'
+      - name: Setup and process
         run: |
-          mkdir -p Dumps
-          mv BA-FlatData/dump.cs Dumps
-
-      - name: Clone BA-Text for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
-        run: |
-          git clone --depth 1 --branch ${{ matrix.server }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
-
-      - name: Setup FlatData for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
-        run: |
-          python setup_flatdata.py ${{ matrix.server }}
-
-      - name: Downloads Table files for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
-        run: |
+          python setup_flatdata.py JP
           chmod +x update/update_table.sh
-          update/update_table.sh ${{ matrix.server }}
+          update/update_table.sh JP
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData ./other/config.json ./unpacked-Text JP
 
-      - name: Unpack ExcelDB.db and Excel.zip for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
-        run: |
-          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData ./other/config.json ./unpacked-Text {{ matrix.server }}
-
-      - name: Prepare FlatData for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
+      - name: Prepare artifacts
         run: |
           cd ./Extracted/FlatData/
           zip -j "${BA_VERSION_NAME}.zip" *
           mv "${BA_VERSION_NAME}.zip" ../../workspace/
           cd
-
-      - name: Prepare Text files for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
-        run: |
           cd ./unpacked-Text
-          zip -r "${{ matrix.server }}${BA_VERSION_NAME}.zip" DBSchema ExcelTable
-          mv "${{ matrix.server }}${BA_VERSION_NAME}.zip" ../workspace/
+          zip -r "JP${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          mv "JP${BA_VERSION_NAME}.zip" ../workspace/
           cd
 
-      - name: Upload Table artifacts for ${{ matrix.server }}
-        if: steps.check-enabled.outputs.server-enabled == 'true'
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: table-changes-${{ matrix.server }}
+          name: table-changes-JP
+          path: workspace/
+          retention-days: 1
+
+  table-gl:
+    runs-on: ubuntu-latest
+    needs: [setup, check-versions-gl]
+    if: needs.setup.outputs.GL-enabled == 'true' && needs.check-versions-gl.outputs.should-run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set version
+        run: echo "BA_VERSION_NAME=${{ needs.setup.outputs.GL-version }}" >> $GITHUB_ENV
+
+      - name: Clone repositories
+        run: |
+          git clone --depth 1 --branch GL https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
+          git clone --depth 1 --branch GL https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
+
+      - name: Make workspace
+        run: mkdir -p workspace
+
+      - name: Setup and process
+        run: |
+          python setup_flatdata.py GL
+          chmod +x update/update_table.sh
+          update/update_table.sh GL
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData ./other/config.json ./unpacked-Text GL
+
+      - name: Prepare artifacts
+        run: |
+          cd ./Extracted/FlatData/
+          zip -j "${BA_VERSION_NAME}.zip" *
+          mv "${BA_VERSION_NAME}.zip" ../../workspace/
+          cd
+          cd ./unpacked-Text
+          zip -r "GL${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          mv "GL${BA_VERSION_NAME}.zip" ../workspace/
+          cd
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: table-changes-GL
+          path: workspace/
+          retention-days: 1
+
+  table-cn:
+    runs-on: ubuntu-latest
+    needs: [setup, check-versions-cn]
+    if: needs.setup.outputs.CN-enabled == 'true' && needs.check-versions-cn.outputs.should-run == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set version
+        run: echo "BA_VERSION_NAME=${{ needs.setup.outputs.CN-version }}" >> $GITHUB_ENV
+
+      - name: Clone repositories
+        run: |
+          git clone --depth 1 --branch CN https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
+          git clone --depth 1 --branch CN https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
+
+      - name: Make workspace
+        run: mkdir -p workspace
+
+      - name: Get CN dump.cs
+        run: |
+          mkdir -p Dumps
+          mv BA-FlatData/dump.cs Dumps
+
+      - name: Setup and process
+        run: |
+          python setup_flatdata.py CN
+          chmod +x update/update_table.sh
+          update/update_table.sh CN
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData ./other/config.json ./unpacked-Text CN
+
+      - name: Prepare artifacts
+        run: |
+          cd ./Extracted/FlatData/
+          zip -j "${BA_VERSION_NAME}.zip" *
+          mv "${BA_VERSION_NAME}.zip" ../../workspace/
+          cd
+          cd ./unpacked-Text
+          zip -r "CN${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          mv "CN${BA_VERSION_NAME}.zip" ../workspace/
+          cd
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: table-changes-CN
           path: workspace/
           retention-days: 1
 
   final-commit:
     runs-on: ubuntu-latest
-    needs: [setup, table, media]
+    needs: [setup, table-jp, table-gl, table-cn]
     steps:
       - name: Login git
         run: |
-          git config --GLobal user.email "actions@github.com"
-          git config --GLobal user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
 
       - name: Create workspace
-        run: |
-          mkdir -p workspace
+        run: mkdir -p workspace
 
-      - name: Clone repositories for all servers
+      - name: Clone repositories
         run: |
           cd workspace
-          
           git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-JP
           git clone --depth 1 --branch GL https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-GL
           git clone --depth 1 --branch CN https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-CN
-          
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git ba-flatdata
 
-      - name: Download artifacts for all servers
+      - name: Download artifacts
         run: |
           mkdir -p artifacts
-          
-          for server in JP GL CN; do
-            if [ "${{ needs.setup.outputs.${server}-enabled }}" = "true" ] && [ "${{ needs.check-versions.outputs.${server}-should-run }}" = "true" ] && [ "${{ needs.table.result }}" = "success" ]; then
-              echo "Downloading table artifacts for $server"
-              gh run download --repo ${{ github.repository }} --name table-changes-$server --dir artifacts/table-changes-$server || true
-            fi
-          done
-          
-      - name: Process each server sequentially
+          gh run download --repo ${{ github.repository }} --name table-changes-JP --dir artifacts/table-changes-JP || true
+          gh run download --repo ${{ github.repository }} --name table-changes-GL --dir artifacts/table-changes-GL || true
+          gh run download --repo ${{ github.repository }} --name table-changes-CN --dir artifacts/table-changes-CN || true
+
+      - name: Process servers
         run: |
           cd workspace
           
           for server in JP GL CN; do
-            if [ "${{ needs.setup.outputs.${server}-enabled }}" = "true" ] && [ "${{ needs.check-versions.outputs.${server}-should-run }}" = "true" ]; then
+            if [ "${{ needs.setup.outputs[format('{0}-enabled', server)] }}" = "true" ]; then
               echo "Processing $server server..."
+              VERSION="${{ needs.setup.outputs[format('{0}-version', server)] }}"
               
-              VERSION="${{ needs.setup.outputs.${server}-version }}"
-              
-              if [ -d "../artifacts/table-changes-${server}" ] && [ "${{ needs.table.result }}" = "success" ]; then
+              if [ -d "../artifacts/table-changes-${server}" ]; then
                 echo "Merging table changes for $server"
                 rsync -av ../artifacts/table-changes-${server}/ba-text-${server}/ ba-text-${server}/ || true
                 rsync -av ../artifacts/table-changes-${server}/ba-flatdata/ ba-flatdata/ || true
               fi
               
-              if [ "${{ needs.table.result }}" = "success" ]; then
-                echo "Committing BA-Text for $server"
-                cd ba-text-${server}
-                git add .
-                if ! git diff --staged --quiet; then
-                  git commit -m "Update ${server^^} Text files - version $VERSION"
-                  git push origin ${server^^}
-                  echo "BA-Text $server commit completed"
-                else
-                  echo "No changes to commit for BA-Text $server"
-                fi
-                cd ..
+              echo "Committing BA-Text for $server"
+              cd ba-text-${server}
+              git add .
+              if ! git diff --staged --quiet; then
+                git commit -m "Update ${server} Text files - version $VERSION"
+                git push origin ${server}
+                echo "BA-Text $server commit completed"
+              else
+                echo "No changes to commit for BA-Text $server"
               fi
+              cd ..
               
-              if [ "${{ needs.table.result }}" = "success" ]; then
-                echo "Committing BA-FlatData for $server"
-                cd ba-flatdata
-                git add .
-                if ! git diff --staged --quiet; then
-                  git commit -m "Update ${server^^} FlatData - version $VERSION"
-                  git push origin
-                  echo "BA-FlatData $server commit completed"
-                else
-                  echo "No changes to commit for BA-FlatData $server"
-                fi
-                cd ..
+              echo "Committing BA-FlatData for $server"
+              cd ba-flatdata
+              git add .
+              if ! git diff --staged --quiet; then
+                git commit -m "Update ${server} FlatData - version $VERSION"
+                git push origin
+                echo "BA-FlatData $server commit completed"
+              else
+                echo "No changes to commit for BA-FlatData $server"
               fi
-
+              cd ..
+              
               echo "Completed processing $server server"
             else
-              echo "Skipping $server server (disabled or no changes)"
+              echo "Skipping $server server (disabled)"
             fi
           done
 
       - name: Cleanup
-        run: |
-          rm -rf artifacts workspace
+        run: rm -rf artifacts workspace
 
   trigger-media-workflow:
     runs-on: ubuntu-latest
@@ -364,11 +512,4 @@ jobs:
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{
-              "event_type": "run-media-deployment",
-              "client_payload": {
-                "JP_enabled": "${{ needs.setup.outputs.JP-enabled }}",
-                "GL_enabled": "${{ needs.setup.outputs.GL-enabled }}", 
-                "CN_enabled": "${{ needs.setup.outputs.CN-enabled }}",
-              }
-            }'
+            -d '{"event_type": "run-media-deployment","client_payload": {"JP_enabled": "${{ needs.setup.outputs.JP-enabled }}","GL_enabled": "${{ needs.setup.outputs.GL-enabled }}","CN_enabled": "${{ needs.setup.outputs.CN-enabled }}"}}'
