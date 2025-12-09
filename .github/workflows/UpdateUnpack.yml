@@ -3,17 +3,17 @@ name: Unpack-Update Table
 on:
   workflow_dispatch:
     inputs:
-      jp_server:
+      JP_server:
         description: 'Enable JP server'
         required: false
         type: boolean
         default: false
-      gl_server:
+      GL_server:
         description: 'Enable GL server'
         required: false
         type: boolean
         default: false
-      cn_server:
+      CN_server:
         description: 'Enable CN server'
         required: false
         type: boolean
@@ -30,574 +30,345 @@ permissions:
   contents: write
 
 jobs:
-  setup:
+  check-versions:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-outputs.outputs.matrix }}
-      versions: ${{ steps.set-outputs.outputs.versions }}
-      flatdata-versions: ${{ steps.set-outputs.outputs.flatdata-versions }}
-      run-flags: ${{ steps.set-outputs.outputs.run-flags }}
-      setup-flatdata-flags: ${{ steps.set-outputs.outputs.setup-flatdata-flags }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Checkout BlueArchive-Translation repository
-        run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
-          mv BlueArchive-Translation/* .
-          rm -rf BlueArchive-Translation
-
-      - name: Set up Python environment
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Determine servers
-        id: determine-servers
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            SERVERS=()
-            if [ "${{ github.event.inputs.jp_server }}" = "true" ]; then
-              SERVERS+=("JP")
-            fi
-            if [ "${{ github.event.inputs.gl_server }}" = "true" ]; then
-              SERVERS+=("GL")
-            fi
-            if [ "${{ github.event.inputs.cn_server }}" = "true" ]; then
-              SERVERS+=("CN")
-            fi
-            
-            if [ ${#SERVERS[@]} -eq 0 ]; then
-              SERVERS=("JP")
-            fi
-            
-            SERVERS_JSON=$(printf '%s\n' "${SERVERS[@]}" | jq -R -n '[inputs]' | jq -c .)
-          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            CLIENT_PAYLOAD='${{ toJSON(github.event.client_payload) }}'
-            if [ "$CLIENT_PAYLOAD" != "null" ] && [ -n "$CLIENT_PAYLOAD" ]; then
-              SERVERS_JSON=$(echo "$CLIENT_PAYLOAD" | jq -c '.servers // ["JP"]')
-            else
-              SERVERS_JSON='["JP"]'
-            fi
-          else
-            SERVERS_JSON='["JP"]'
-          fi
-          
-          echo "matrix=$SERVERS_JSON" >> $GITHUB_OUTPUT
-          echo "SERVERS_JSON=$SERVERS_JSON" >> $GITHUB_OUTPUT
-
-      - name: Get version information
-        id: get-versions
-        run: |
-          SERVERS_JSON='${{ steps.determine-servers.outputs.SERVERS_JSON }}'
-          echo "SERVERS_JSON: $SERVERS_JSON"
-          
-          VERSIONS="{}"
-          FLATDATA_VERSIONS="{}"
-          
-          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
-          echo "Servers to process: $SERVERS"
-          
-          if [ -z "$SERVERS" ]; then
-            SERVERS="JP"
-          fi
-          
-          while IFS= read -r SERVER; do
-            if [ -n "$SERVER" ]; then
-              echo "Processing server: $SERVER"
-              
-              VERSION_INFO=$(bash other/version.sh "$SERVER" info.json 2>/dev/null || echo "")
-              if [ -n "$VERSION_INFO" ]; then
-                BA_VERSION=$(echo "$VERSION_INFO" | grep "BA_VERSION_NAME=" | cut -d= -f2)
-                FLATDATA_VERSION=$(echo "$VERSION_INFO" | grep "FLATDATA_VERSION_NAME=" | cut -d= -f2)
-                
-                if [ -n "$BA_VERSION" ]; then
-                  VERSIONS=$(echo "$VERSIONS" | jq --arg server "$SERVER" --arg version "$BA_VERSION" '. + {($server): $version}')
-                fi
-                if [ -n "$FLATDATA_VERSION" ]; then
-                  FLATDATA_VERSIONS=$(echo "$FLATDATA_VERSIONS" | jq --arg server "$SERVER" --arg version "$FLATDATA_VERSION" '. + {($server): $version}')
-                fi
-              fi
-            fi
-          done <<< "$SERVERS"
-          
-          echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
-          echo "flatdata-versions=$FLATDATA_VERSIONS" >> $GITHUB_OUTPUT
-
-      - name: Check existing files
-        id: check-files
-        run: |
-          SERVERS_JSON='${{ steps.determine-servers.outputs.SERVERS_JSON }}'
-          VERSIONS_JSON='${{ steps.get-versions.outputs.versions }}'
-          FLATDATA_VERSIONS_JSON='${{ steps.get-versions.outputs.flatdata-versions }}'
-          
-          RUN_FLAGS="{}"
-          SETUP_FLATDATA_FLAGS="{}"
-          
-          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
-          if [ -z "$SERVERS" ]; then
-            SERVERS="JP"
-          fi
-          
-          while IFS= read -r SERVER; do
-            if [ -n "$SERVER" ]; then
-              SERVER_VERSION=$(echo "$VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
-              SERVER_FLATDATA_VERSION=$(echo "$FLATDATA_VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
-              
-              git clone --depth 1 --branch "$SERVER" "https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git" "flatdata-check-$SERVER" || FLATDATA_EXISTS="false"
-              
-              if [ -f "flatdata-check-${SERVER}/${SERVER}${SERVER_FLATDATA_VERSION}.zip" ]; then
-                FLATDATA_EXISTS="true"
-              else
-                FLATDATA_EXISTS="false"
-              fi
-              rm -rf "flatdata-check-${SERVER}"
-              
-              if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-                RUN_FLAGS=$(echo "$RUN_FLAGS" | jq -c --arg server "$SERVER" '. + {($server): "true"}')
-                SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq -c --arg server "$SERVER" --arg flag "$FLATDATA_EXISTS" '. + {($server): $flag}')
-              else
-                git clone --depth 1 "https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git" ba-text-check
-                if [ -f "ba-text-check/${SERVER}${SERVER_VERSION}.zip" ]; then
-                  RUN_FLAGS=$(echo "$RUN_FLAGS" | jq -c --arg server "$SERVER" '. + {($server): "false"}')
-                  SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq -c --arg server "$SERVER" --arg flag "true" '. + {($server): $flag}')
-                else
-                  RUN_FLAGS=$(echo "$RUN_FLAGS" | jq -c --arg server "$SERVER" '. + {($server): "true"}')
-                  SETUP_FLATDATA_FLAGS=$(echo "$SETUP_FLATDATA_FLAGS" | jq -c --arg server "$SERVER" --arg flag "$FLATDATA_EXISTS" '. + {($server): $flag}')
-                fi
-                rm -rf ba-text-check
-              fi
-            fi
-          done <<< "$SERVERS"
-          
-          echo "run-flags=$RUN_FLAGS" >> $GITHUB_OUTPUT
-          echo "setup-flatdata-flags=$SETUP_FLATDATA_FLAGS" >> $GITHUB_OUTPUT
-
-      - name: Set final outputs
-        id: set-outputs
-        run: |
-          MATRIX_OUTPUT='${{ steps.determine-servers.outputs.matrix }}'
-          if echo "$MATRIX_OUTPUT" | jq -e . >/dev/null 2>&1; then
-            echo "matrix=$MATRIX_OUTPUT" >> $GITHUB_OUTPUT
-          else
-            echo "matrix=[\"JP\"]" >> $GITHUB_OUTPUT
-          fi
-          
-          VERSIONS_OUTPUT='${{ steps.get-versions.outputs.versions }}'
-          if echo "$VERSIONS_OUTPUT" | jq -e . >/dev/null 2>&1; then
-            echo "versions=$VERSIONS_OUTPUT" >> $GITHUB_OUTPUT
-          else
-            echo "versions={\"JP\":\"\"}" >> $GITHUB_OUTPUT
-          fi
-          
-          FLATDATA_VERSIONS_OUTPUT='${{ steps.get-versions.outputs.flatdata-versions }}'
-          if echo "$FLATDATA_VERSIONS_OUTPUT" | jq -e . >/dev/null 2>&1; then
-            echo "flatdata-versions=$FLATDATA_VERSIONS_OUTPUT" >> $GITHUB_OUTPUT
-          else
-            echo "flatdata-versions={\"JP\":\"\"}" >> $GITHUB_OUTPUT
-          fi
-          
-          RUN_FLAGS_OUTPUT='${{ steps.check-files.outputs.run-flags }}'
-          if echo "$RUN_FLAGS_OUTPUT" | jq -e . >/dev/null 2>&1; then
-            echo "run-flags=$RUN_FLAGS_OUTPUT" >> $GITHUB_OUTPUT
-          else
-            echo "run-flags={\"JP\":\"true\"}" >> $GITHUB_OUTPUT
-          fi
-          
-          SETUP_FLATDATA_FLAGS_OUTPUT='${{ steps.check-files.outputs.setup-flatdata-flags }}'
-          if echo "$SETUP_FLATDATA_FLAGS_OUTPUT" | jq -e . >/dev/null 2>&1; then
-            echo "setup-flatdata-flags=$SETUP_FLATDATA_FLAGS_OUTPUT" >> $GITHUB_OUTPUT
-          else
-            echo "setup-flatdata-flags={\"JP\":\"false\"}" >> $GITHUB_OUTPUT
-          fi
-
-  Table:
-    runs-on: ubuntu-latest
-    needs: setup
+      JP-should-run: ${{ steps.check-JP.outputs.should-run }}
+      GL-should-run: ${{ steps.check-GL.outputs.should-run }}
+      CN-should-run: ${{ steps.check-CN.outputs.should-run }}
+      JP-version: ${{ steps.get-JP-version.outputs.BA_VERSION_NAME }}
+      GL-version: ${{ steps.get-GL-version.outputs.BA_VERSION_NAME }}
+      CN-version: ${{ steps.get-CN-version.outputs.BA_VERSION_NAME }}
     strategy:
       matrix:
-        server: ${{ fromJSON(needs.setup.outputs.matrix) }}
-    env:
-      SERVER: ${{ matrix.server }}
-      BA_VERSION_NAME: ${{ fromJSON(needs.setup.outputs.versions)[matrix.server] }}
-      FLATDATA_VERSION_NAME: ${{ fromJSON(needs.setup.outputs.flatdata-versions)[matrix.server] }}
+        server: [JP, GL, CN]
     steps:
-      - name: Check if should run
-        id: check-run
-        run: |
-          if [ "${{ github.event_name }}" = 'schedule' ]; then
-            RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
-            SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "${{ matrix.server }}" '.[$server]')
-            if [ "$SERVER_RUN_FLAG" = 'true' ]; then
-              echo "Should run for server ${{ matrix.server }}"
-              echo "should-run=true" >> $GITHUB_OUTPUT
-            else
-              echo "Skipping server ${{ matrix.server }} for schedule run"
-              echo "should-run=false" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "Should run for manual/dispatch event"
-            echo "should-run=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Skip if not needed
-        if: steps.check-run.outputs.should_run == 'false'
-        run: |
-          echo "Skipping execution for server ${{ matrix.server }}"
-          exit 0
-
       - name: Checkout code
-        if: steps.check-run.outputs.should_run == 'true'
         uses: actions/checkout@v4
         with:
           submodules: false
 
       - name: Clone repository
-        if: steps.check-run.outputs.should_run == 'true'
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
 
       - name: Move contents to current directory
-        if: steps.check-run.outputs.should_run == 'true'
         run: |
           mv BlueArchive-Translation/* .
           rm -rf BlueArchive-Translation
 
       - name: Set up Python 3.13
-        if: steps.check-run.outputs.should_run == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
       - name: Install requirements
-        if: steps.check-run.outputs.should_run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Login
-        if: steps.check-run.outputs.should_run == 'true'
+      - name: Get version for ${{ matrix.server }}
+        id: get-${{ matrix.server }}-version
         run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-      - name: Clone BA-FlatData
-        if: steps.check-run.outputs.should_run == 'true'
-        run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git
-
-      - name: Check for existing FlatData zip
-        if: steps.check-run.outputs.should_run == 'true'
-        id: check-flatdata-zip
-        run: |
-          if [ -f "BA-FlatData/${SERVER}${BA_VERSION_NAME}.zip" ]; then
-            echo "zip-exists=true" >> $GITHUB_OUTPUT
+          if [ -f "info_${{ matrix.server }}.json" ]; then
+            bash other/version.sh ${{ matrix.server }} info.json >> "$GITHUB_OUTPUT"
           else
-            echo "zip-exists=false" >> $GITHUB_OUTPUT
+            echo "BA_VERSION_NAME=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup FlatData conditionally
-        if: steps.check-run.outputs.should_run == 'true' && fromJSON(needs.setup.outputs.setup-flatdata-flags)[matrix.server] == 'false' && steps.check-flatdata-zip.outputs.zip-exists == 'false'
+      - name: Check BA-Text repository for ${{ matrix.server }} version file
+        id: check-${{ matrix.server }}
         run: |
-          if [ "$SERVER" = "CN" ]; then
-            git clone --depth 1 --branch "CN" https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git flatdata-cn
-            if [ -f "flatdata-cn/dump.cs" ]; then
-              mkdir -p Dumps
-              cp flatdata-cn/dump.cs Dumps/
-            fi
-            rm -rf flatdata-cn
-          fi
-          python setup_flatdata.py $SERVER
-
-      - name: Downloads Table files and run MemoryPackRepacker
-        if: steps.check-run.outputs.should_run == 'true'
-        run: |
-          chmod +x update/update_table.sh
-          ./update/update_table.sh $SERVER
-
-      - name: Create temporary directory for unpacked files
-        if: steps.check-run.outputs.should_run == 'true'
-        run: |
-          mkdir -p temp_unpacked
-
-      - name: Decrypt database for JP server
-        if: steps.check-run.outputs.should_run == 'true' && matrix.server == 'JP'
-        run: |
-          DB_FILE="./downloads/TableBundles/ExcelDB.db"
-          if [ -f "$DB_FILE" ]; then
-            if [ -n "${{ github.event.inputs.db_key }}" ] && [ "${{ github.event.inputs.db_key }}" != "" ]; then
-              KEY="${{ github.event.inputs.db_key }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "Manual trigger, skip version check for ${{ matrix.server }}"
+            echo "should-run=true" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ steps.get-${{ matrix.server }}-version.outputs.BA_VERSION_NAME }}"
+            git clone --depth 1 --branch ${{{ matrix.server }}} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-check-${{ matrix.server }}
+            if [ -f "ba-text-check-${{ matrix.server }}/${{ matrix.server }}${VERSION}.zip" ]; then
+              echo "Found version $VERSION file for ${{ matrix.server }}, skip"
+              echo "should-run=false" >> $GITHUB_OUTPUT
             else
-              KEY="${{ secrets.DB_DECRYPT_KEY }}"
+              echo "No version $VERSION file found for ${{ matrix.server }}, continue"
+              echo "should-run=true" >> $GITHUB_OUTPUT
             fi
-            
-            if [ -z "$KEY" ]; then
-              echo "Warning: No decryption key provided, skipping database decryption"
-              exit 0
-            fi
-            
-            echo "PRAGMA key = \"x'$KEY'\";" > decrypt_commands.txt
-            echo "BEGIN TRANSACTION;" >> decrypt_commands.txt
-            echo "SELECT sqlcipher_export('main');" >> decrypt_commands.txt
-            echo "COMMIT;" >> decrypt_commands.txt
-            echo ".quit" >> decrypt_commands.txt
-            
-            sqlcipher "$DB_FILE" < decrypt_commands.txt
-            echo "Database decrypted successfully"
-          else
-            echo "Database file not found: $DB_FILE"
-          fi
-
-      - name: Unpack ExcelDB.db and Excel.zip to temporary directory
-        if: steps.check-run.outputs.should_run == 'true'
-        run: |
-          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./temp_unpacked/FlatData config.json temp_text $SERVER
-
-      - name: Prepare FlatData zip conditionally
-        if: steps.check-run.outputs.should_run == 'true' && fromJSON(needs.setup.outputs.setup-flatdata-flags)[matrix.server] == 'false' && steps.check-flatdata-zip.outputs.zip-exists == 'false'
-        run: |
-          mkdir -p temp_flatdata_output
-          cd ./temp_unpacked/FlatData/
-          zip -j "../../temp_flatdata_output/${SERVER}${BA_VERSION_NAME}.zip" *
-          cd
-
-      - name: Check for existing Text zip
-        if: steps.check-run.outputs.should_run == 'true'
-        id: check-text-zip
-        run: |
-          if [ -f "${SERVER}${BA_VERSION_NAME}.zip" ]; then
-            echo "text-zip-exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "text-zip-exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Prepare Text zip conditionally
-        if: steps.check-run.outputs.should_run == 'true' && steps.check-text-zip.outputs.text-zip-exists == 'false'
-        run: |
-          mkdir -p temp_text_output
-          
-          if [ -d "temp_unpacked/FlatData/ExcelTable" ]; then
-            cp -r temp_unpacked/FlatData/ExcelTable temp_text_output/
+            rm -rf ba-text-check-${{ matrix.server }}
           fi
           
-          cd temp_text_output
-          zip -r "../temp_flatdata_output/${SERVER}${BA_VERSION_NAME}.zip" *
-          cd
-
-      - name: Check for existing Catalog zip
-        if: steps.check-run.outputs.should_run == 'true'
-        id: check-catalog-zip
-        run: |
-          if [ -f "${SERVER}Catalog${BA_VERSION_NAME}.zip" ]; then
-            echo "catalog-zip-exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "catalog-zip-exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Prepare Catalog zip conditionally
-        if: steps.check-run.outputs.should_run == 'true' && steps.check-catalog-zip.outputs.catalog-zip-exists == 'false'
-        run: |
-          if [ -f "TableCatalog.json" ] && [ -f "MediaCatalog.json" ] && [ -f "BundlePackingInfo-iOS.json" ] && [ -f "BundlePackingInfo-Android.json" ]; then
-            mkdir -p temp_flatdata_output
-            zip "temp_flatdata_output/${SERVER}Catalog${BA_VERSION_NAME}.zip" TableCatalog.json MediaCatalog.json BundlePackingInfo-iOS.json BundlePackingInfo-Android.json
-          fi
-
-      - name: Upload Table artifacts
-        if: steps.check-run.outputs.should_run == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: table-changes-${{ matrix.server }}
-          path: |
-            temp_flatdata_output/
-          retention-days: 1
-        continue-on-error: true
-
-  Commit:
+  setup:
     runs-on: ubuntu-latest
-    needs: [setup, Table]
-    if: always() && (contains(needs.*.result, 'success') || contains(needs.*.result, 'skipped')) && (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' || (github.event_name == 'schedule' && fromJSON(needs.setup.outputs.run-flags)[fromJSON(needs.setup.outputs.matrix)[0]] == 'true'))
+    needs: check-versions
+    outputs:
+      JP-enabled: ${{ steps.detect-servers.outputs.JP-enabled }}
+      GL-enabled: ${{ steps.detect-servers.outputs.GL-enabled }}
+      CN-enabled: ${{ steps.detect-servers.outputs.CN-enabled }}
+      JP-version: ${{ needs.check-versions.outputs.JP-version }}
+      GL-version: ${{ needs.check-versions.outputs.GL-version }}
+      CN-version: ${{ needs.check-versions.outputs.CN-version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: false
 
-      - name: Clone repositories
+      - name: Clone repository
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
 
-      - name: Download all artifacts
+      - name: Move contents to current directory
         run: |
-          SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
-          echo "Servers JSON: $SERVERS_JSON"
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Detect enabled servers
+        id: detect-servers
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            JP_ENABLED="${{ github.event.client_payload.JP_enabled }}"
+            GL_ENABLED="${{ github.event.client_payload.GL_enabled  }}"
+            CN_ENABLED="${{ github.event.client_payload.CN_enabled  }}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            JP_ENABLED="true"
+            GL_ENABLED="true"
+            CN_ENABLED="true"
+          else
+            JP_ENABLED="${{ inputs.JP_Enabled }}"
+            GL_ENABLED="${{ inputs.GL_Enabled  }}"
+            CN_ENABLED="${{ inputs.CN_Enabled  }}"
+          fi
           
-          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
-          RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
+          echo "JP-enabled=$JP_ENABLED" >> $GITHUB_OUTPUT
+          echo "GL-enabled=$GL_ENABLED" >> $GITHUB_OUTPUT
+          echo "CN-enabled=$CN_ENABLED" >> $GITHUB_OUTPUT
+
+  table:
+    runs-on: ubuntu-latest
+    needs: setup
+    strategy:
+      matrix:
+        server: [JP, GL, CN]
+    steps:
+      - name: Check server enabled
+        id: check-enabled
+        run: |
+          SERVER_ENABLED="${{ needs.setup.outputs.${{ matrix.server }}-enabled }}"
+          SERVER_SHOULD_RUN="${{ needs.check-versions.outputs.${{ matrix.server }}-should-run }}"
           
-          while IFS= read -r SERVER; do
-            if [ -n "$SERVER" ]; then
-              if [ "${{ github.event_name }}" = 'schedule' ]; then
-                SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
-                if [ "$SERVER_RUN_FLAG" = 'false' ]; then
-                  echo "Skipping $SERVER for schedule run"
-                  continue
-                fi
-              fi
-              
-              echo "Downloading artifacts for server: $SERVER"
-              mkdir -p artifacts/$SERVER
-              
-              gh run download --repo $GITHUB_REPOSITORY --name table-changes-$SERVER --dir artifacts/$SERVER || echo "No artifacts found for $SERVER"
+          if [ "$SERVER_ENABLED" = "true" ] && [ "$SERVER_SHOULD_RUN" = "true" ]; then
+            echo "server-enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "server-enabled=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout code
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Clone repository
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
+
+      - name: Move contents to current directory
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
+
+      - name: Set up Python 3.13
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install requirements
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Get version for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          echo "BA_VERSION_NAME=${{ needs.setup.outputs.${{ matrix.server }}-version }}" >> $GITHUB_ENV
+
+      - name: Clone BA-FlatData for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          git clone --depth 1 --branch ${{ matrix.server }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
+
+      - name: Make workspace
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          mkdir -p workspace
+
+      - name: Get CN dump.cs
+        if: steps.check-enabled.outputs.server-enabled == 'true' && {{ matrix.server }} == 'CN'
+        run: |
+          mkdir -p Dumps
+          mv BA-FlatData/dump.cs Dumps
+
+      - name: Clone BA-Text for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          git clone --depth 1 --branch ${{ matrix.server }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
+
+      - name: Setup FlatData for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          python setup_flatdata.py ${{ matrix.server }}
+
+      - name: Downloads Table files for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          chmod +x update/update_table.sh
+          update/update_table.sh ${{ matrix.server }}
+
+      - name: Unpack ExcelDB.db and Excel.zip for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./unpacked ./Extracted/FlatData ./other/config.json ./unpacked-Text {{ matrix.server }}
+
+      - name: Prepare FlatData for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          cd ./Extracted/FlatData/
+          zip -j "${BA_VERSION_NAME}.zip" *
+          mv "${BA_VERSION_NAME}.zip" ../../workspace/
+          cd
+
+      - name: Prepare Text files for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        run: |
+          cd ./unpacked-Text
+          zip -r "${{ matrix.server }}${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          mv "${{ matrix.server }}${BA_VERSION_NAME}.zip" ../workspace/
+          cd
+
+      - name: Upload Table artifacts for ${{ matrix.server }}
+        if: steps.check-enabled.outputs.server-enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: table-changes-${{ matrix.server }}
+          path: workspace/
+          retention-days: 1
+
+  final-commit:
+    runs-on: ubuntu-latest
+    needs: [setup, table, media]
+    steps:
+      - name: Login git
+        run: |
+          git config --GLobal user.email "actions@github.com"
+          git config --GLobal user.name "GitHub Actions"
+
+      - name: Create workspace
+        run: |
+          mkdir -p workspace
+
+      - name: Clone repositories for all servers
+        run: |
+          cd workspace
+          
+          git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-JP
+          git clone --depth 1 --branch GL https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-GL
+          git clone --depth 1 --branch CN https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git ba-text-CN
+          
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git ba-flatdata
+
+      - name: Download artifacts for all servers
+        run: |
+          mkdir -p artifacts
+          
+          for server in JP GL CN; do
+            if [ "${{ needs.setup.outputs.${server}-enabled }}" = "true" ] && [ "${{ needs.check-versions.outputs.${server}-should-run }}" = "true" ] && [ "${{ needs.table.result }}" = "success" ]; then
+              echo "Downloading table artifacts for $server"
+              gh run download --repo ${{ github.repository }} --name table-changes-$server --dir artifacts/table-changes-$server || true
             fi
-          done <<< "$SERVERS"
-
-      - name: Process and merge artifacts
+          done
+          
+      - name: Process each server sequentially
         run: |
-          SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
-          VERSIONS_JSON='${{ needs.setup.outputs.versions }}'
-          FLATDATA_VERSIONS_JSON='${{ needs.setup.outputs.flatdata-versions }}'
-          SETUP_FLATDATA_FLAGS_JSON='${{ needs.setup.outputs.setup-flatdata-flags }}'
+          cd workspace
           
-          FLATDATA_HAS_CHANGES=false
-          TEXT_HAS_CHANGES=false
-          
-          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
-          
-          while IFS= read -r SERVER; do
-            if [ -n "$SERVER" ]; then
-              if [ "${{ github.event_name }}" = 'schedule' ]; then
-                SETUP_FLAG=$(echo "$SETUP_FLATDATA_FLAGS_JSON" | jq -r --arg server "$SERVER" '.[$server]')
-                if [ "$SETUP_FLAG" = 'false' ]; then
-                  echo "Skipping $SERVER for schedule run (setup flag is false)"
-                  continue
-                fi
+          for server in JP GL CN; do
+            if [ "${{ needs.setup.outputs.${server}-enabled }}" = "true" ] && [ "${{ needs.check-versions.outputs.${server}-should-run }}" = "true" ]; then
+              echo "Processing $server server..."
+              
+              VERSION="${{ needs.setup.outputs.${server}-version }}"
+              
+              if [ -d "../artifacts/table-changes-${server}" ] && [ "${{ needs.table.result }}" = "success" ]; then
+                echo "Merging table changes for $server"
+                rsync -av ../artifacts/table-changes-${server}/ba-text-${server}/ ba-text-${server}/ || true
+                rsync -av ../artifacts/table-changes-${server}/ba-flatdata/ ba-flatdata/ || true
               fi
               
-              SERVER_VERSION=$(echo "$VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
-              NEED_SETUP_FLATDATA=$(echo "$SETUP_FLATDATA_FLAGS_JSON" | jq -r --arg server "$SERVER" '.[$server]')
-              
-              echo "Processing server: $SERVER, Version: $SERVER_VERSION"
-              
-              if [ -d "artifacts/$SERVER/temp_flatdata_output" ]; then
-                echo "Found artifacts for $SERVER"
-                
-                if [ "$NEED_SETUP_FLATDATA" = "false" ]; then
-                  if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" ]; then
-                    cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" "BA-FlatData/"
-                    FLATDATA_HAS_CHANGES=true
-                  fi
+              if [ "${{ needs.table.result }}" = "success" ]; then
+                echo "Committing BA-Text for $server"
+                cd ba-text-${server}
+                git add .
+                if ! git diff --staged --quiet; then
+                  git commit -m "Update ${server^^} Text files - version $VERSION"
+                  git push origin ${server^^}
+                  echo "BA-Text $server commit completed"
+                else
+                  echo "No changes to commit for BA-Text $server"
                 fi
-                
-                if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" ]; then
-                  cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}${SERVER_VERSION}.zip" "BA-Text/"
-                  TEXT_HAS_CHANGES=true
-                fi
-                
-                if [ -f "artifacts/$SERVER/temp_flatdata_output/${SERVER}Catalog${SERVER_VERSION}.zip" ]; then
-                  cp "artifacts/$SERVER/temp_flatdata_output/${SERVER}Catalog${SERVER_VERSION}.zip" "BA-Text/"
-                  TEXT_HAS_CHANGES=true
-                fi
+                cd ..
               fi
+              
+              if [ "${{ needs.table.result }}" = "success" ]; then
+                echo "Committing BA-FlatData for $server"
+                cd ba-flatdata
+                git add .
+                if ! git diff --staged --quiet; then
+                  git commit -m "Update ${server^^} FlatData - version $VERSION"
+                  git push origin
+                  echo "BA-FlatData $server commit completed"
+                else
+                  echo "No changes to commit for BA-FlatData $server"
+                fi
+                cd ..
+              fi
+
+              echo "Completed processing $server server"
+            else
+              echo "Skipping $server server (disabled or no changes)"
             fi
-          done <<< "$SERVERS"
-          
-          echo "FLATDATA_HAS_CHANGES=$FLATDATA_HAS_CHANGES" >> $GITHUB_ENV
-          echo "TEXT_HAS_CHANGES=$TEXT_HAS_CHANGES" >> $GITHUB_ENV
-
-      - name: Configure git
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-      - name: Commit to BA-Text
-        if: env.TEXT_HAS_CHANGES == 'true'
-        run: |
-          cd BA-Text
-          SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
-          VERSIONS_JSON='${{ needs.setup.outputs.versions }}'
-          
-          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
-          RUN_FLAGS='${{ needs.setup.outputs.run-flags }}'
-          
-          while IFS= read -r SERVER; do
-            if [ -n "$SERVER" ]; then
-              if [ "${{ github.event_name }}" = 'schedule' ]; then
-                SERVER_RUN_FLAG=$(echo "$RUN_FLAGS" | jq -r --arg server "$SERVER" '.[$server]')
-                if [ "$SERVER_RUN_FLAG" = 'false' ]; then
-                  echo "Skipping $SERVER for schedule run"
-                  continue
-                fi
-              fi
-              
-              SERVER_VERSION=$(echo "$VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
-              
-              if git show-ref --quiet refs/heads/$SERVER; then
-                git checkout $SERVER
-              else
-                git checkout -b $SERVER
-              fi
-              
-              git add .
-              if ! git diff --staged --quiet; then
-                git commit -m "Update $SERVER Text files - version $SERVER_VERSION"
-                git push origin $SERVER
-                echo "BA-Text $SERVER branch committed"
-              else
-                echo "BA-Text $SERVER branch no changes to commit"
-              fi
-            fi
-          done <<< "$SERVERS"
-          cd ..
-
-      - name: Commit to BA-FlatData
-        if: env.FLATDATA_HAS_CHANGES == 'true'
-        run: |
-          cd BA-FlatData
-          SERVERS_JSON='${{ needs.setup.outputs.matrix }}'
-          VERSIONS_JSON='${{ needs.setup.outputs.versions }}'
-          SETUP_FLATDATA_FLAGS_JSON='${{ needs.setup.outputs.setup-flatdata-flags }}'
-          
-          SERVERS=$(echo "$SERVERS_JSON" | jq -r '.[]' 2>/dev/null || echo "JP")
-          
-          while IFS= read -r SERVER; do
-            if [ -n "$SERVER" ]; then
-              if [ "${{ github.event_name }}" = 'schedule' ]; then
-                SETUP_FLAG=$(echo "$SETUP_FLATDATA_FLAGS_JSON" | jq -r --arg server "$SERVER" '.[$server]')
-                if [ "$SETUP_FLAG" = 'false' ]; then
-                  echo "Skipping $SERVER for schedule run (setup flag is false)"
-                  continue
-                fi
-              fi
-              
-              SERVER_VERSION=$(echo "$VERSIONS_JSON" | jq -r --arg server "$SERVER" '.[$server] // ""')
-              
-              if git show-ref --quiet refs/heads/$SERVER; then
-                git checkout $SERVER
-              else
-                git checkout -b $SERVER
-              fi
-              
-              git add .
-              if ! git diff --staged --quiet; then
-                git commit -m "Update $SERVER FlatData - version $SERVER_VERSION"
-                git push origin $SERVER
-                echo "BA-FlatData $SERVER branch committed"
-              else
-                echo "BA-FlatData $SERVER branch no changes to commit"
-              fi
-            fi
-          done <<< "$SERVERS"
-          cd ..
+          done
 
       - name: Cleanup
         run: |
-          rm -rf artifacts
+          rm -rf artifacts workspace
+
+  trigger-media-workflow:
+    runs-on: ubuntu-latest
+    needs: [setup, final-commit]
+    if: always() && (contains(needs.*.result, 'success') || contains(needs.*.result, 'skipped'))
+    steps:
+      - name: Trigger media workflow
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/dispatches \
+            -d '{
+              "event_type": "run-media-deployment",
+              "client_payload": {
+                "JP_enabled": "${{ needs.setup.outputs.JP-enabled }}",
+                "GL_enabled": "${{ needs.setup.outputs.GL-enabled }}", 
+                "CN_enabled": "${{ needs.setup.outputs.CN-enabled }}",
+              }
+            }'
