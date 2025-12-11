@@ -340,14 +340,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dump
-          path: Extracted/Dumps/
+          path: Extracted/
           retention-days: 1
 
       - name: Prepare artifacts
         run: |
           cd ./Extracted/FlatData/
-          zip -j "${BA_VERSION_NAME}.zip" *
-          mv "${BA_VERSION_NAME}.zip" ../../workspace/
+          zip -j "GL${BA_VERSION_NAME}.zip" *
+          mv "GL${BA_VERSION_NAME}.zip" ../../workspace/
           cd ../../unpacked
           zip -r "GL${BA_VERSION_NAME}.zip" DBSchema ExcelTable
           mv "GL${BA_VERSION_NAME}.zip" ../workspace/
@@ -421,8 +421,8 @@ jobs:
           zip -j "${BA_VERSION_NAME}.zip" *
           mv "${BA_VERSION_NAME}.zip" ../../workspace/
           cd ../../unpacked
-          zip -r "GL${BA_VERSION_NAME}.zip" DBSchema ExcelTable
-          mv "GL${BA_VERSION_NAME}.zip" ../workspace/
+          zip -r "CN${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          mv "CN${BA_VERSION_NAME}.zip" ../workspace/
           cd
 
       - name: Upload artifacts
