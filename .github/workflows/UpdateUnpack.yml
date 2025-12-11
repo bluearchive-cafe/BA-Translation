@@ -335,9 +335,13 @@ jobs:
       - name: Setup and process
         run: |
           python setup_flatdata.py GL
-          chmod +x update/update_table.sh
-          update/update_table.sh GL
-          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked GL
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dump
+          path: Extracted/Dumps/
+          retention-days: 1
 
       - name: Prepare artifacts
         run: |
