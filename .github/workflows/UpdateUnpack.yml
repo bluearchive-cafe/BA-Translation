@@ -272,20 +272,27 @@ jobs:
           update/update_table.sh JP
           python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked JP --db_key "${{ needs.setup.outputs.db_key }}"
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dump-jp
+          path: Extracted/
+          retention-days: 1
+
       - name: Prepare artifacts
         run: |
           cd ./Extracted/FlatData/
-          zip -j "${BA_VERSION_NAME}.zip" *
-          mv "${BA_VERSION_NAME}.zip" ../../workspace/
+          zip -j "FlatData${BA_VERSION_NAME}.zip" *
+          mv "FlatData${BA_VERSION_NAME}.zip" ../../workspace/
           cd ../../unpacked
-          zip -r "GL${BA_VERSION_NAME}.zip" DBSchema ExcelTable
-          mv "GL${BA_VERSION_NAME}.zip" ../workspace/
+          zip -r "日服${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          mv "日服${BA_VERSION_NAME}.zip" ../workspace/
           cd
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: table-changes-JP
+          name: table-jp
           path: workspace/
           retention-days: 1
 
@@ -335,28 +342,31 @@ jobs:
       - name: Setup and process
         run: |
           python setup_flatdata.py GL
+          chmod +x update/update_table.sh
+          update/update_table.sh GL
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked GL
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dump
+          name: dump-gl
           path: Extracted/
           retention-days: 1
 
       - name: Prepare artifacts
         run: |
           cd ./Extracted/FlatData/
-          zip -j "GL${BA_VERSION_NAME}.zip" *
-          mv "GL${BA_VERSION_NAME}.zip" ../../workspace/
+          zip -j "FlatData${BA_VERSION_NAME}.zip" *
+          mv "FlatData${BA_VERSION_NAME}.zip" ../../workspace/
           cd ../../unpacked
-          zip -r "GL${BA_VERSION_NAME}.zip" DBSchema ExcelTable
-          mv "GL${BA_VERSION_NAME}.zip" ../workspace/
+          zip -r "国际服${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          mv "国际服${BA_VERSION_NAME}.zip" ../workspace/
           cd
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: table-changes-GL
+          name: table-gl
           path: workspace/
           retention-days: 1
 
@@ -415,20 +425,27 @@ jobs:
           update/update_table.sh CN
           python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked CN
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dump-cn
+          path: Extracted/
+          retention-days: 1
+
       - name: Prepare artifacts
         run: |
           cd ./Extracted/FlatData/
-          zip -j "${BA_VERSION_NAME}.zip" *
-          mv "${BA_VERSION_NAME}.zip" ../../workspace/
+          zip -j "FlatData${BA_VERSION_NAME}.zip" *
+          mv "FlatData${BA_VERSION_NAME}.zip" ../../workspace/
           cd ../../unpacked
-          zip -r "CN${BA_VERSION_NAME}.zip" DBSchema ExcelTable
-          mv "CN${BA_VERSION_NAME}.zip" ../workspace/
+          zip -r "国服${BA_VERSION_NAME}.zip" DBSchema ExcelTable
+          mv "国服${BA_VERSION_NAME}.zip" ../workspace/
           cd
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: table-changes-CN
+          name: table-cn
           path: workspace/
           retention-days: 1
 
