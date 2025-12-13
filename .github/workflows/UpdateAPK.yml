@@ -40,7 +40,7 @@ jobs:
 
       - name: Test
         run: |
-          python 测试2.py
+          python 测试.py
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
