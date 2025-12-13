@@ -46,5 +46,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test
-          path: Temp/extracted_apks/AndroidManifest.xml
+          path: Temp/extracted_apks/AndroidManifest.modified.xml
           retention-days: 1
