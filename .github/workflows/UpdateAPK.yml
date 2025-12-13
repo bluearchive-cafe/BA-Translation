@@ -1,0 +1,50 @@
+name: Update APK
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [APK]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
+
+      - name: Clone repository
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git BlueArchive-Translation
+
+      - name: Move contents to current directory
+        run: |
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install androguard
+
+      - name: Test
+        run: |
+          python 测试2.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test
+          path: temp/
+          retention-days: 1
