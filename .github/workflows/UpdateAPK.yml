@@ -37,8 +37,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install androguard
+    
+      - name: Install Android SDK and build tools
+        run: |
+          sudo apt update
+          sudo apt install -y android-sdk
+          mkdir -p $HOME/build-tools
+          wget https://dl.google.com/android/repository/build-tools_r33-linux.zip -O build-tools.zip
+          unzip build-tools.zip -d $HOME/build-tools/
+          APKSIGNER_PATH=$(find $HOME/build-tools -name apksigner -type f | head -n1)     
+          echo "Found apksigner at: $APKSIGNER_PATH"
+          echo "APKSIGNER_PATH=$APKSIGNER_PATH" >> $GITHUB_ENV
+          echo "ANDROID_BUILD_TOOLS=$HOME/build-tools" >> $GITHUB_ENV
+
+      - name: Verify installation
+        run: |
+          echo "Checking apksigner..."
+          $APKSIGNER_PATH version
+    
+          echo "Checking Android SDK..."
+          which adb || echo "adb not found (optional)"
+    
+          echo "Environment variables:"
+          echo "APKSIGNER_PATH: $APKSIGNER_PATH"
+          echo "PATH includes build-tools: $(echo $PATH | grep build-tools || echo 'No')"
 
       - name: Test
+        PATH: ${{ env.PATH }}:${{ env.ANDROID_BUILD_TOOLS }}/$(ls ${{ env.ANDROID_BUILD_TOOLS }} | head -n1)
         run: |
           python 测试.py
 
