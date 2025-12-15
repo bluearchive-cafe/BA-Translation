@@ -44,14 +44,6 @@ jobs:
           pip install -r requirements.txt
           pip install androguard
 
-      - name: Install Android SDK Build Tools
-        run: |
-          sudo apt update
-          sudo apt install -y android-sdk
-          wget https://dl.google.com/android/repository/build-tools_r34-linux.zip
-          unzip build-tools_r34-linux.zip
-          echo "export PATH=$PATH:$(pwd)/build-tools/34.0.0/" >> $GITHUB_ENV
-
       - name: Run extraction script
         run: |
           python apktool.py
