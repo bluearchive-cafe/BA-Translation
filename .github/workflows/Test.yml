@@ -36,7 +36,8 @@ jobs:
         run: |
           chmod +x ./other/crcmanip
           ./other/crcmanip patch 测试.txt 输出.txt 1234abcd -p -1
-          ./other/crcmanip patch SDKConfigSettings.json 输出.json ee0aa105 -p -4
+          ./other/crcmanip patch SDKConfigSettings.json 输出.json ee0aa105 -p -3
+          ./other/crcmanip calc SDKConfigSettings.json -a CRC16IBM
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
