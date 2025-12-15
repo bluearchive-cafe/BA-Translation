@@ -35,7 +35,7 @@ jobs:
       - name: Run extraction script
         run: |
           chmod +x ./other/crcmanip
-          ./other/crcmanip patch 测试.txf 输出.txt 1234abcd -p -1
+          ./other/crcmanip patch 测试.txt 输出.txt 1234abcd -p -1
           ./other/crcmanip patch SDKConfigSettings.json 输出.json ee0aa105 -p -4
 
       - name: Upload artifacts
