@@ -47,4 +47,4 @@ jobs:
       - name: Run extraction script
         run: |
           chmod +x ./other/crcmanip
-          python update_apkl.py
+          python update_apk.py
