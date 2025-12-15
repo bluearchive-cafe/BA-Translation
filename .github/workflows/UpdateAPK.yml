@@ -44,20 +44,13 @@ jobs:
           pip install -r requirements.txt
           pip install androguard
 
-      - name: Download apksigner
+      - name: Install Android SDK Build Tools
         run: |
-          mkdir -p android-sdk/build-tools/34.0.0
-          
-          wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
-          unzip -q -j build-tools_r34-linux.zip "build-tools/34.0.0/apksigner" -d android-sdk/build-tools/34.0.0/
-          
-          chmod +x android-sdk/build-tools/34.0.0/apksigner
-          
-          echo "$(pwd)/android-sdk/build-tools/34.0.0" >> $GITHUB_PATH
-          
-      - name: Verify apksigner
-        run: |
-          apksigner --version
+          sudo apt update
+          sudo apt install -y android-sdk
+          wget https://dl.google.com/android/repository/build-tools_r34-linux.zip
+          unzip build-tools_r34-linux.zip
+          echo "export PATH=$PATH:$(pwd)/build-tools/34.0.0/" >> $GITHUB_ENV
 
       - name: Run extraction script
         run: |
