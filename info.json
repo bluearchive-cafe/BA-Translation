@@ -10,14 +10,14 @@
     },
     "JP": {
         "ServerInfoDataUrl": "https://yostar-serverinfo.bluearchiveyostar.com/r86_63_valo0kvoir39ti2g00u7.json",
-        "AddressableCatalogUrl": "https://prod-clientpatch.bluearchiveyostar.com/r86_103ufdv4ctda8yphvbjj",
+        "AddressableCatalogUrl": "https://prod-clientpatch.bluearchiveyostar.com/r86_px35uw6urlv9hc7genm9",
         "APKVersionName": "1.63.384227",
         "APKVersionCode": "384227"
     },
     "GL": {
-        "ServerInfoDataUrl": "https://ba.dn.nexoncdn.co.kr/com.nexon.bluearchive/a80ef15b704341a9/resource-data.json",
-        "AddressableCatalogUrl": "https://ba.dn.nexoncdn.co.kr/com.nexon.bluearchive/a80ef15b704341a9/",
-        "APKVersionName": "1.82.378581",
-        "APKVersionCode": "378581"
+        "ServerInfoDataUrl": "https://ba.dn.nexoncdn.co.kr/com.nexon.bluearchive/6a4ce7ce5171450e/resource-data.json",
+        "AddressableCatalogUrl": "https://ba.dn.nexoncdn.co.kr/com.nexon.bluearchive/6a4ce7ce5171450e/",
+        "APKVersionName": "1.82.390231",
+        "APKVersionCode": "390231"
     }
 }

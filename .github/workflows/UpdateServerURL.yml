@@ -46,26 +46,40 @@ jobs:
           rm -rf Temp/
 
       - name: Check if info.json was modified
+        id: check-changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add info.json
+          
+          JP_UPDATED=false
+          GL_UPDATED=false
+          CN_UPDATED=false
+          UPDATE_DETECTED=false
+          
           if git diff --cached --quiet; then
-            echo "No updates detected, skip the submission."
             echo "update_detected=false" >> $GITHUB_ENV
           else
+            UPDATE_DETECTED=true
+            
             git diff --cached info.json > changes.diff
+            
             if grep -q 'CN' changes.diff; then
-              echo "CN region was updated"
+              CN_UPDATED=true
             fi
+            
             if grep -q 'JP' changes.diff; then
-              echo "JP region was updated"
+              JP_UPDATED=true
             fi
+            
             if grep -q 'GL' changes.diff; then
-              echo "GL region was updated"
+              GL_UPDATED=true
             fi
-            echo "Detected changes in info.json, updating the server addresses..."
-            echo "update_detected=true" >> $GITHUB_ENV
+            
+            echo "JP_updated=$JP_UPDATED" >> $GITHUB_ENV
+            echo "GL_updated=$GL_UPDATED" >> $GITHUB_ENV
+            echo "CN_updated=$CN_UPDATED" >> $GITHUB_ENV
+            echo "update_detected=$UPDATE_DETECTED" >> $GITHUB_ENV
           fi
 
       - name: Commit and push changes if info.json was modified
@@ -73,8 +87,13 @@ jobs:
         run: |
           git commit -m "更新悠星服务器URL"
           git push origin HEAD
+          
+          JP_ENABLED=${{ env.JP_updated }}
+          GL_ENABLED=${{ env.GL_updated }}
+          CN_ENABLED=${{ env.CN_updated }}
+          
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "run-deployment","client_payload": {"unpack_flatdata": true,"downloads_media": false,"run_media": true}}'
+            -d '{"event_type": "run-deployment","client_payload": {"JP_enabled": '$JP_ENABLED',"GL_enabled": '$GL_ENABLED',"CN_enabled": '$CN_ENABLED'}}'
