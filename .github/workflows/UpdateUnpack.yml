@@ -1,4 +1,4 @@
-name: Unpack-Update Table
+name: Update-Unpack Excel
 
 on:
   workflow_dispatch:

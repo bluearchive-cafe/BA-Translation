@@ -1,4 +1,4 @@
-name: Tools-Translation text
+name: Update-Translation text
 
 on:
   workflow_dispatch:
@@ -76,5 +76,5 @@ jobs:
           cd BA-Text
           git add .
 
-          git commit -m "Commit translation."
+          git commit -m "提交汉化文本"
           git push origin JP

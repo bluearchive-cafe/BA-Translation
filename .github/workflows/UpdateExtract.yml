@@ -1,4 +1,4 @@
-name: Tools-Extract new text
+name: Update-Extract new text
 
 on:
   workflow_dispatch:
