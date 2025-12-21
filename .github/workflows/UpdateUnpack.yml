@@ -85,35 +85,26 @@ jobs:
             [ -f "check/${{ matrix.server.id }}${{ steps.v.outputs.ver }}.zip" ] && echo "run=false" >> $GITHUB_OUTPUT || echo "run=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install Dependencies
-        if: steps.check.outputs.run == 'true'
+      - name: Run Main Process
         run: |
           sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
           pip install pysqlcipher3 sqlcipher3 -r requirements.txt
-
-      - name: Clone Data Repos
-        if: steps.check.outputs.run == 'true'
-        run: |
           git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
           git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
           [ "${{ matrix.server.id }}" = "CN" ] && mkdir -p Dumps && cp BA-FlatData/dump.cs Dumps/ || true
-
-      - name: Run Python Script
-        if: steps.check.outputs.run == 'true'
-        run: |
           python setup_flatdata.py ${{ matrix.server.id }}
           chmod +x update/update_table.sh && update/update_table.sh ${{ matrix.server.id }}
           python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked ${{ matrix.server.id }} --db_key "${{ needs.setup.outputs.db_key }}"
 
       - name: Package Artifacts
-        if: steps.check.outputs.run == 'true'
+        if: steps.check.outputs.run == 'true' && success()
         run: |
           mkdir -p workspace
           cd Extracted/FlatData && zip -j "../../workspace/FlatData${{ steps.v.outputs.ver }}.zip" * && cd ../..
           cd unpacked && zip -r "../workspace/${{ matrix.server.name }}${{ steps.v.outputs.ver }}.zip" DBSchema ExcelTable && cd ..
 
       - name: Upload Artifact
-        if: steps.check.outputs.run == 'true'
+        if: steps.check.outputs.run == 'true' && success()
         uses: actions/upload-artifact@v4
         with:
           name: table-${{ matrix.server.id }}
@@ -123,7 +114,7 @@ jobs:
     name: Final Commit
     needs: [setup, process]
     runs-on: ubuntu-latest
-    if: always() && contains(needs.process.result, 'success')
+    if: always() && needs.setup.outputs.matrix != '[]' && !contains(needs.process.result, 'cancelled')
     env:
       GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
     steps:
@@ -132,7 +123,7 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Download All Artifacts
+      - name: Download All Available Artifacts
         uses: actions/download-artifact@v4
         with:
           path: all-artifacts
@@ -141,25 +132,29 @@ jobs:
 
       - name: Commit Changes
         run: |
+          if [ ! -d "all-artifacts" ] || [ -z "$(ls -A all-artifacts)" ]; then
+            echo "没有发现任何成功的服务器产物，退出。"
+            exit 0
+          fi
+
           git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-FlatData.git fd
           for s in JP GL CN; do
-            [ ! -d "all-artifacts/table-$s" ] && { echo "Skip $s (no artifacts)"; continue; }
+            if [ -d "all-artifacts/table-$s" ]; then
+              echo ">>> 正在处理成功运行的服: $s"
+              git clone --depth 1 --branch $s https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-Text.git "txt-$s"
+              
+              rsync -av "all-artifacts/table-$s/" "txt-$s/"
+              rsync -av "all-artifacts/
+
+              cd "txt-$s"
+              git add .
+              git diff --staged --quiet || (git commit -m "Update $s Text" && git push origin $s)
+              cd ..
             
-            echo "Processing $s..."
-            git clone --depth 1 --branch $s https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-Text.git "txt-$s"
-            
-            rsync -av "all-artifacts/table-$s/" "txt-$s/"
-            rsync -av "all-artifacts/table-$s/" "fd/"
-            
-            cd "txt-$s"
-            git add .
-            git diff --staged --quiet || (git commit -m "Update $s Text" && git push origin $s)
-            cd ..
-            
-            cd fd
-            git add .
-            git diff --staged --quiet || (git commit -m "Update $s FlatData" && git push origin)
-            cd ..
+              cd fd
+              git add .
+              git diff --staged --quiet || (git commit -m "Update $s FlatData" && git push origin)
+              cd ..
           done
 
   trigger:
