@@ -4,9 +4,11 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+permissions:
+  contents: write
 
 jobs:
-  check-and-update:
+  update:
     runs-on: ubuntu-latest
 
     steps:
@@ -53,6 +55,7 @@ jobs:
                -H "Content-Type: application/x-www-form-urlencoded" \
                --data-urlencode "url=https://prod-noticeindex.bluearchiveyostar.com/prod/index.json" \
                --data-urlencode "capture_outlinks=on" > /dev/null
+
             curl -X POST \
                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                -H "Accept: application/vnd.github.v3+json" \

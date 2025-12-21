@@ -2,7 +2,8 @@ name: Update-Text
 
 on:
   workflow_dispatch:
-
+permissions:
+  contents: write
 jobs:
   repository:
     runs-on: ubuntu-latest
