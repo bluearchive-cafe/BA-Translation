@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   setup:
-    name: Setup Environment
+    name: 设置环境
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -54,7 +54,7 @@ jobs:
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
   process:
-    name: Process ${{ matrix.server.name }}
+    name: 运行${{ matrix.server.name }}
     needs: setup
     runs-on: ubuntu-latest
     strategy:
@@ -132,7 +132,7 @@ jobs:
           path: workspace/
 
   Final:
-    name: Final Commit
+    name: 上传文件
     needs: [setup, process]
     runs-on: ubuntu-latest
     if: always() && needs.setup.outputs.matrix != '[]' && !contains(needs.process.result, 'cancelled')
