@@ -77,6 +77,8 @@ jobs:
         run: git push
 
       - name: Update server
+        timeout-minutes: 5
+        continue-on-error: true
         run: |
           python check.py info.json
 
