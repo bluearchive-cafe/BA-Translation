@@ -117,12 +117,12 @@ jobs:
           update/update_table.sh ${{ matrix.server.id }}
           python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked ${{ matrix.server.id }} --db_key "${{ needs.setup.outputs.db_key }}"
 
-      - name: Package Artifacts
+      - name: Package Raw Data
         if: steps.check.outputs.run == 'true' && success()
         run: |
-          mkdir -p workspace/bundle_repo workspace/flatdata_repo
-          cd unpacked && zip -r "../workspace/bundle_repo/${{ matrix.server.name }}${{ steps.v.outputs.ver }}.zip" DBSchema ExcelTable && cd ..
-          cd Extracted/FlatData && zip -j "../../workspace/flatdata_repo/${{ matrix.server.id }}${{ steps.v.outputs.ver }}.zip" * && cd ../..
+          mkdir -p workspace/bundle_raw workspace/flatdata_raw
+          cp -r unpacked/* workspace/bundle_raw/
+          cp -r Extracted/FlatData/* workspace/flatdata_raw/
 
       - name: Upload Artifact
         if: steps.check.outputs.run == 'true' && success()
@@ -151,6 +151,9 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
+      - name: Clone Tool
+        run: git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
+
       - name: Download All Available Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -160,24 +163,44 @@ jobs:
 
       - name: Commit Changes
         run: |
-          if [ ! -d "all-artifacts" ] || [ -z "$(ls -A all-artifacts)" ]; then
-            exit 0
-          fi
-
           for s in JP GL CN; do
             if [ -d "all-artifacts/table-$s" ]; then
+              VER=$(bash tool/other/version.sh $s tool/info.json | cut -d'=' -f2)
+              case $s in
+                JP) NAME="日服" ;;
+                GL) NAME="国际服" ;;
+                CN) NAME="国服" ;;
+              esac
+
               git clone --depth 1 --branch $s git@github.com:roundRekt/BA-Assets-TableBundles.git "txt-$s"
-              rsync -av "all-artifacts/table-$s/bundle_repo/" "txt-$s/"
+              cd "all-artifacts/table-$s/bundle_raw"
+              zip -r "../../../txt-$s/${NAME}${VER}.zip" DBSchema ExcelTable
+              cd ../../../
+              
               cd "txt-$s"
               git add .
-              git diff --staged --quiet || (git commit -m "Update $s Text Assets" && git push origin $s)
+              git diff --staged --quiet || (git commit -m "Update $s Text Assets ${VER}" && git push origin $s)
               cd ..
               
               git clone --depth 1 --branch $s https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-FlatData.git "fd-$s"
-              rsync -av "all-artifacts/table-$s/flatdata_repo/" "fd-$s/"
+              cd "all-artifacts/table-$s/flatdata_raw"
+              zip -j "../../../fd-$s/${s}${VER}.zip" *
+              cd ../../../
+              
               cd "fd-$s"
               git add .
-              git diff --staged --quiet || (git commit -m "Update $s FlatData Zip" && git push origin $s)
+              git diff --staged --quiet || (git commit -m "Update $s FlatData Zip ${VER}" && git push origin $s)
               cd ..
             fi
           done
+
+  trigger:
+    name: Trigger Media
+    needs: [setup, Final]
+    runs-on: ubuntu-latest
+    if: always() && needs.Final.result == 'success'
+    steps:
+      - run: |
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/${{ github.repository }}/dispatches \
+          -d '{"event_type": "run-media-deployment","client_payload": {"JP_enabled": "${{ needs.setup.outputs.jp_sw }}","GL_enabled": "${{ needs.setup.outputs.gl_sw }}","CN_enabled": "${{ needs.setup.outputs.cn_sw }}"}}'
