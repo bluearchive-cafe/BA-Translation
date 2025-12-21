@@ -76,7 +76,7 @@ jobs:
       - name: Push Changes
         run: git push
 
-      - name: Update jp server
+      - name: Update server
         run: |
           python check.py info.json
 
