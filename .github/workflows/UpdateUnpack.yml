@@ -84,10 +84,8 @@ jobs:
       - name: Get Version for Verification
         id: v
         run: |
-          # 运行脚本获取当前 Job 内部的版本号
           bash other/version.sh ${{ matrix.server.id }} info.json
-          # 提取输出用于 check 步骤 (注意脚本会自动添加前缀)
-          echo "ver=$(cat $GITHUB_OUTPUT | grep '${{ matrix.server.id }}_BA_VERSION_NAME' | cut -d'=' -f2)" >> $GITHUB_OUTPUT
+          echo "ver=$(grep '${{ matrix.server.id }}_BA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)" >> $GITHUB_OUTPUT
 
       - name: Verify Remote Version Status
         id: check
@@ -168,58 +166,6 @@ jobs:
       - name: Get and Debug Versions
         id: get_ver
         run: |
-          echo "=== Version Detection Start ==="
-          for s in JP GL CN; do
-            if [ -d "all-artifacts/table-$s" ]; then
-              # 执行脚本，变量会自动写入 $GITHUB_OUTPUT
-              bash tool/other/version.sh "$s" info.json
-              
-              # 为了方便调试，我们手动解析一下并打印到控制台日志
-              # 注意：脚本输出到 $GITHUB_OUTPUT 的内容在当前步骤结束前无法通过 ${{ steps... }} 读取
-              # 所以我们直接通过 grep 获取刚刚写入的内容来打印
-              BA_V=$(grep "${s}_BA_VERSION_NAME" "$GITHUB_OUTPUT" | cut -d'=' -f2)
-              FD_V=$(grep "${s}_FLATDATA_VERSION_NAME" "$GITHUB_OUTPUT" | cut -d'=' -f2)
-              
-              echo "Server ID: $s"
-              echo "  >> BA_VERSION_NAME: $BA_V"
-              echo "  >> FLATDATA_VERSION_NAME: $FD_V"
-            fi
-          done
-          echo "=== Version Detection Complete ==="
-
-  Final:
-    name: Final Commit
-    needs: [setup, process]
-    runs-on: ubuntu-latest
-    if: always() && needs.setup.outputs.matrix != '[]' && !contains(needs.process.result, 'cancelled')
-    env:
-      GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Git Identity
-        run: |
-          git config --global user.email "actions@github.com"
-          git config --global user.name "GitHub Actions"
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-
-      - name: Prepare Translation Tool
-        run: git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
-
-      - name: Download Processed Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: all-artifacts
-          pattern: table-*
-          merge-multiple: false
-
-      - name: Get and Debug Versions
-        id: get_ver
-        run: |
           for s in JP GL CN; do
             if [ -d "all-artifacts/table-$s" ]; then
               bash tool/other/version.sh "$s" info.json
@@ -239,12 +185,10 @@ jobs:
                 GL) NAME="国际服"; V_T="${{ steps.get_ver.outputs.GL_BA_VERSION_NAME }}"; V_F="${{ steps.get_ver.outputs.GL_FLATDATA_VERSION_NAME }}" ;;
                 CN) NAME="国服"; V_T="${{ steps.get_ver.outputs.CN_BA_VERSION_NAME }}"; V_F="${{ steps.get_ver.outputs.CN_FLATDATA_VERSION_NAME }}" ;;
               esac
-              
-              echo "正在打包 $NAME..."
+              echo "Packaging $NAME..."
               cd "all-artifacts/table-$s/bundle_raw"
               zip -r "../../../final-packages/text/${s}_${NAME}${V_T}.zip" DBSchema ExcelTable
               cd ../../../
-              
               cd "all-artifacts/table-$s/flatdata_raw"
               zip -j "../../../final-packages/flat/${s}_${NAME}${V_F}.zip" *
               cd ../../../
@@ -255,7 +199,6 @@ jobs:
         run: |
           for s in JP GL CN; do
             if [ -f final-packages/text/${s}_*.zip ]; then
-              echo "推送 $s Text 仓库..."
               git clone --depth 1 --branch $s git@github.com:roundRekt/BA-Assets-TableBundles.git "repo-text-$s"
               cp final-packages/text/${s}_*.zip "repo-text-$s/"
               cd "repo-text-$s"
@@ -264,9 +207,7 @@ jobs:
               git diff --staged --quiet || (git commit -m "Update Text Assets ($s)" && git push origin $s)
               cd ..
             fi
-
             if [ -f final-packages/flat/${s}_*.zip ]; then
-              echo "推送 $s FlatData 仓库..."
               git clone --depth 1 --branch $s https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-FlatData.git "repo-flat-$s"
               cp final-packages/flat/${s}_*.zip "repo-flat-$s/"
               cd "repo-flat-$s"

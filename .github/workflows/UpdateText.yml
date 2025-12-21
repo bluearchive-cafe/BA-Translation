@@ -59,11 +59,11 @@ jobs:
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text-Translation.git BA-Text-Translation
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/beichen.git beichen
 
-          python tools/clean.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" other/config.json "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
-          python tools/update.py "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
+          python tools/clean.py "BA-Text/日服${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }}.zip" other/config.json "BA-Text-Translation/日服${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }}.zip"
+          python tools/update.py "BA-Text-Translation/日服${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
           python tools/back.py other/config.json "BA-Text-Translation"
           python -m tools.re_extract "BA-Text-Translation" "BA-Text-Translation/日服备份.zip" other/config.json 10
-          python tools/format.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
+          python tools/format.py "BA-Text/日服${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }}.zip"
 
       - name: Commit files Translation
         run: |

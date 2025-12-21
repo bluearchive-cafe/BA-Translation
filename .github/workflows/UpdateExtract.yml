@@ -83,8 +83,8 @@ jobs:
 
       - name: Check version
         run: |
-          new="${{ steps.new_ver.outputs.BA_VERSION_NAME }}"
-          old="${{ steps.prev_ver.outputs.BA_VERSION_NAME }}"
+          new="${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }}"
+          old="${{ steps.prev_ver.outputs.JP_BA_VERSION_NAME }}"
           if [[ "$new" == "$old" ]]; then
             echo "ERROR: Version numbers are the same but content differs!"
             echo "Current version: $new"
@@ -98,7 +98,7 @@ jobs:
 
       - name: Run extract
         run: |
-          python tools/extract.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text/日服${{ steps.prev_ver.outputs.BA_VERSION_NAME }}.zip" "./BA-Text" other/config.json 10
+          python tools/extract.py "BA-Text/日服${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }}.zip" "BA-Text/日服${{ steps.prev_ver.outputs.JP_BA_VERSION_NAME }}.zip" "./BA-Text" other/config.json 10
 
       - name: Commit extract text
         run: |
@@ -108,7 +108,7 @@ jobs:
           cd BA-Text
           git add .
 
-          git commit -m "Extract text for version ${{ steps.new_ver.outputs.BA_VERSION_NAME }} (from ${{ steps.prev_ver.outputs.BA_VERSION_NAME }})"
+          git commit -m "Extract text for version ${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }} (from ${{ steps.prev_ver.outputs.JP_BA_VERSION_NAME }})"
           git push origin JP
 
       - name: Deploy Translation
