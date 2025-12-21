@@ -1,99 +1,201 @@
-name: Update-Text
+name: Update-Unpack Excel
 
 on:
   workflow_dispatch:
+    inputs:
+      JP_Enabled: { type: boolean, default: false }
+      GL_Enabled: { type: boolean, default: false }
+      CN_Enabled: { type: boolean, default: false }
+  repository_dispatch:
+    types: [run-deployment]
+
+permissions:
+  contents: write
 
 jobs:
-  repository:
+  setup:
+    name: Setup Environment
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      db_key: ${{ steps.detect.outputs.db_key }}
+      jp_sw: ${{ steps.detect.outputs.jp }}
+      gl_sw: ${{ steps.detect.outputs.gl }}
+      cn_sw: ${{ steps.detect.outputs.cn }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Clone Tool
+        run: git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
+          
+      - id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "jp=${{ github.event.client_payload.JP_enabled || 'false' }}" >> $GITHUB_OUTPUT
+            echo "gl=${{ github.event.client_payload.GL_enabled || 'false' }}" >> $GITHUB_OUTPUT
+            echo "cn=${{ github.event.client_payload.CN_enabled || 'false' }}" >> $GITHUB_OUTPUT
+          else
+            echo "jp=${{ inputs.JP_Enabled }}" >> $GITHUB_OUTPUT
+            echo "gl=${{ inputs.GL_Enabled }}" >> $GITHUB_OUTPUT
+            echo "cn=${{ inputs.CN_Enabled }}" >> $GITHUB_OUTPUT
+          fi
+          echo "db_key=${{ secrets.DB_DECRYPT_KEY }}" >> $GITHUB_OUTPUT
 
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      - id: set-matrix
+        run: |
+          MATRIX=$(jq -nc \
+            --arg jp "${{ steps.detect.outputs.jp }}" \
+            --arg gl "${{ steps.detect.outputs.gl }}" \
+            --arg cn "${{ steps.detect.outputs.cn }}" \
+            '[
+              {id: "JP", name: "日服", enabled: $jp},
+              {id: "GL", name: "国际服", enabled: $gl},
+              {id: "CN", name: "国服", enabled: $cn}
+            ] | map(select(.enabled == "true"))')
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
-      - name: Get SSH key
+  process:
+    name: Process ${{ matrix.server.name }}
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: 
+        server: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone Tool
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
+          cp -r tool/* . && rm -rf tool
+
+      - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
-      - name: Login
+      - name: Get Version
+        id: v
+        run: |
+          V=$(bash other/version.sh ${{ matrix.server.id }} info.json | cut -d'=' -f2)
+          echo "ver=$V" >> $GITHUB_OUTPUT
+
+      - name: Check Remote Version
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" =~ (workflow|repository)_dispatch ]]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:roundRekt/BA-Assets-TableBundles.git check
+            [ -f "check/${{ matrix.server.id }}${{ steps.v.outputs.ver }}.zip" ] && echo "run=false" >> $GITHUB_OUTPUT || echo "run=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install System Dependencies
+        if: steps.check.outputs.run == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlcipher-dev
+
+      - name: Install Python Dependencies
+        if: steps.check.outputs.run == 'true'
+        run: pip install pysqlcipher3 sqlcipher3 -r requirements.txt
+
+      - name: Clone Server Repositories
+        if: steps.check.outputs.run == 'true'
+        run: |
+          git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
+          git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:roundRekt/BA-Assets-TableBundles.git BA-Text
+          [ "${{ matrix.server.id }}" = "CN" ] && mkdir -p Dumps && cp BA-FlatData/dump.cs Dumps/ || true
+
+      - name: Execute Setup Script
+        if: steps.check.outputs.run == 'true'
+        run: python setup_flatdata.py ${{ matrix.server.id }}
+
+      - name: Execute Update Script
+        if: steps.check.outputs.run == 'true'
+        run: |
+          chmod +x update/update_table.sh
+          update/update_table.sh ${{ matrix.server.id }}
+
+      - name: Execute Unpack Script
+        if: steps.check.outputs.run == 'true'
+        run: python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked ${{ matrix.server.id }} --db_key "${{ needs.setup.outputs.db_key }}"
+
+      - name: Package Artifacts
+        if: steps.check.outputs.run == 'true' && success()
+        run: |
+          mkdir -p workspace/text_repo workspace/flatdata_repo
+          cd Extracted/FlatData && zip -j "../../workspace/text_repo/FlatData${{ steps.v.outputs.ver }}.zip" * && cd ../..
+          cd unpacked && zip -r "../workspace/text_repo/${{ matrix.server.name }}${{ steps.v.outputs.ver }}.zip" DBSchema ExcelTable && cd ..
+          cp -r Extracted/FlatData/* workspace/flatdata_repo/
+
+      - name: Upload Artifact
+        if: steps.check.outputs.run == 'true' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: table-${{ matrix.server.id }}
+          path: workspace/
+
+  Final:
+    name: Final Commit
+    needs: [setup, process]
+    runs-on: ubuntu-latest
+    if: always() && needs.setup.outputs.matrix != '[]' && !contains(needs.process.result, 'cancelled')
+    env:
+      GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
+    steps:
+      - name: Git Config
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Clone repositories
+      - name: Configure SSH
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git BlueArchive-Translation
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
-      - name: Move contents to current directory
-        run: |
-          mv BlueArchive-Translation/* .
-          rm -rf BlueArchive-Translation
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+      - name: Download All Available Artifacts
+        uses: actions/download-artifact@v4
         with:
-          python-version: '3.13'
+          path: all-artifacts
+          pattern: table-*
+          merge-multiple: false
 
-      - name: Install requirements
+      - name: Commit Changes
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Get new version
-        id: new_ver
-        run: |
-          echo "Current info.json content:"
-          cat info.json
-          echo "Running version.sh on current info.json:"
-          bash other/version.sh JP info.json >> "$GITHUB_OUTPUT"
-
-      - name: Run update
-        run: |
-          git clone --depth 1 git@github.com:asfu222/beicheng.git beicheng
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text-Translation.git BA-Text-Translation
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/beichen.git beichen
-
-          python tools/clean.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" other/config.json "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
-          python tools/update.py "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
-          python tools/back.py other/config.json "BA-Text-Translation"
-          python -m tools.re_extract "BA-Text-Translation" "BA-Text-Translation/日服备份.zip" other/config.json 10
-          python tools/format.py "BA-Text/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
-
-      - name: Commit files Translation
-        run: |
-          cd BA-Text-Translation
-          if [ -d "NewBack" ]; then
-            rm -rf "NewBack"
-          fi      
-          if [ -d "ReviseBack" ]; then
-            rm -rf "ReviseBack"
+          if [ ! -d "all-artifacts" ] || [ -z "$(ls -A all-artifacts)" ]; then
+            exit 0
           fi
+
+          git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-FlatData.git fd
+          for s in JP GL CN; do
+            if [ -d "all-artifacts/table-$s" ]; then
+              git clone --depth 1 --branch $s git@github.com:roundRekt/BA-Assets-TableBundles.git "txt-$s"
+              rsync -av "all-artifacts/table-$s/text_repo/" "txt-$s/"
+              cd "txt-$s"
+              git add .
+              git diff --staged --quiet || (git commit -m "Update $s Assets" && git push origin $s)
+              cd ..
+              rsync -av "all-artifacts/table-$s/flatdata_repo/" "fd/"
+            fi
+          done
+          
+          cd fd
           git add .
+          git diff --staged --quiet || (git commit -m "Update FlatData" && git push origin)
+          cd ..
 
-          git commit -m "文本写回 $(date +%F-%T)"
-          git push origin
-          cd
-
-      - name: Commit files beicheng
-        run: |
-          cd beicheng
-          git add .
-
-          git commit -m "提交汉化文本 $(date +%F-%T)"
-          git push origin
-          cd
-
-      - name: Commit files beichen
-        run: |
-          cd beichen
-          git add .
-
-          git commit -m "提交汉化文本 $(date +%F-%T)"
-          git push origin
-          cd
+  trigger:
+    name: Trigger Media
+    needs: [setup, Final]
+    runs-on: ubuntu-latest
+    if: always() && needs.Final.result == 'success'
+    steps:
+      - run: |
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/${{ github.repository }}/dispatches \
+          -d '{"event_type": "run-media-deployment","client_payload": {"JP_enabled": "${{ needs.setup.outputs.jp_sw }}","GL_enabled": "${{ needs.setup.outputs.gl_sw }}","CN_enabled": "${{ needs.setup.outputs.cn_sw }}"}}'

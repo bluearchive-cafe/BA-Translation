@@ -69,6 +69,11 @@ jobs:
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* . && rm -rf tool
 
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - name: Get Version
         id: v
         run: |
@@ -78,10 +83,11 @@ jobs:
       - name: Check Remote Version
         id: check
         run: |
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
           if [[ "${{ github.event_name }}" =~ (workflow|repository)_dispatch ]]; then
             echo "run=true" >> $GITHUB_OUTPUT
           else
-            git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git check
+            git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:roundRekt/BA-Assets-TableBundles.git check
             [ -f "check/${{ matrix.server.id }}${{ steps.v.outputs.ver }}.zip" ] && echo "run=false" >> $GITHUB_OUTPUT || echo "run=true" >> $GITHUB_OUTPUT
           fi
 
@@ -91,7 +97,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
           pip install pysqlcipher3 sqlcipher3 -r requirements.txt
           git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
-          git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
+          git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:roundRekt/BA-Assets-TableBundles.git BA-Text
           [ "${{ matrix.server.id }}" = "CN" ] && mkdir -p Dumps && cp BA-FlatData/dump.cs Dumps/ || true
           python setup_flatdata.py ${{ matrix.server.id }}
           chmod +x update/update_table.sh && update/update_table.sh ${{ matrix.server.id }}
@@ -100,9 +106,10 @@ jobs:
       - name: Package Artifacts
         if: steps.check.outputs.run == 'true' && success()
         run: |
-          mkdir -p workspace
-          cd Extracted/FlatData && zip -j "../../workspace/FlatData${{ steps.v.outputs.ver }}.zip" * && cd ../..
-          cd unpacked && zip -r "../workspace/${{ matrix.server.name }}${{ steps.v.outputs.ver }}.zip" DBSchema ExcelTable && cd ..
+          mkdir -p workspace/text_repo workspace/flatdata_repo
+          cd Extracted/FlatData && zip -j "../../workspace/text_repo/FlatData${{ steps.v.outputs.ver }}.zip" * && cd ../..
+          cd unpacked && zip -r "../workspace/text_repo/${{ matrix.server.name }}${{ steps.v.outputs.ver }}.zip" DBSchema ExcelTable && cd ..
+          cp -r Extracted/FlatData/* workspace/flatdata_repo/
 
       - name: Upload Artifact
         if: steps.check.outputs.run == 'true' && success()
@@ -124,6 +131,11 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - name: Download All Available Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -133,6 +145,7 @@ jobs:
 
       - name: Commit Changes
         run: |
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
           if [ ! -d "all-artifacts" ] || [ -z "$(ls -A all-artifacts)" ]; then
             exit 0
           fi
@@ -140,21 +153,21 @@ jobs:
           git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-FlatData.git fd
           for s in JP GL CN; do
             if [ -d "all-artifacts/table-$s" ]; then
-              git clone --depth 1 --branch $s https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-Text.git "txt-$s"
-              rsync -av "all-artifacts/table-$s/" "txt-$s/"
-              rsync -av "all-artifacts/table-$s/" "fd/"
-              
+              git clone --depth 1 --branch $s git@github.com:roundRekt/BA-Assets-TableBundles.git "txt-$s"
+              rsync -av "all-artifacts/table-$s/text_repo/" "txt-$s/"
               cd "txt-$s"
               git add .
-              git diff --staged --quiet || (git commit -m "Update $s Text" && git push origin $s)
+              git diff --staged --quiet || (git commit -m "Update $s Assets" && git push origin $s)
               cd ..
             
-              cd fd
-              git add .
-              git diff --staged --quiet || (git commit -m "Update $s FlatData" && git push origin)
-              cd ..
+              rsync -av "all-artifacts/table-$s/flatdata_repo/" "fd/"
             fi
           done
+          
+          cd fd
+          git add .
+          git diff --staged --quiet || (git commit -m "Update FlatData" && git push origin)
+          cd ..
 
   trigger:
     name: Trigger Media
