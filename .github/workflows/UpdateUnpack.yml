@@ -6,7 +6,6 @@ on:
       JP_Enabled: { type: boolean, default: false }
       GL_Enabled: { type: boolean, default: false }
       CN_Enabled: { type: boolean, default: false }
-      db_key: { type: string, required: false }
   repository_dispatch:
     types: [run-deployment]
 
@@ -37,7 +36,7 @@ jobs:
             echo "gl=${{ inputs.GL_Enabled }}" >> $GITHUB_OUTPUT
             echo "cn=${{ inputs.CN_Enabled }}" >> $GITHUB_OUTPUT
           fi
-          echo "db_key=${{ inputs.db_key }}" >> $GITHUB_OUTPUT
+          echo "db_key=${{ secrets.DB_DECRYPT_KEY }}" >> $GITHUB_OUTPUT
 
       - id: set-matrix
         run: |
