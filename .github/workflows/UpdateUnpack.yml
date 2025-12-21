@@ -81,12 +81,6 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
-      - name: Fetch Current Server Version
-        id: v
-        run: |
-          V_OUT=$(bash other/version.sh ${{ matrix.server.id }} info.json)
-          V_BA=$(echo "$V_OUT" | grep "BA_VERSION_NAME" | cut -d' ' -f2)
-          echo "ver=$V_BA" >> $GITHUB_OUTPUT
 
       - name: Verify Remote Version Status
         id: check
@@ -176,36 +170,53 @@ jobs:
           pattern: table-*
           merge-multiple: false
 
+      - name: Get Version
+        id: get_ver
+        run: |
+          for s in JP GL CN; do
+            if [ -d "all-artifacts/table-$s" ]; then
+              bash tool/other/version.sh "$s" info.json | sed "s/^/${s}_/" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
       - name: Package and Push Changes
         run: |
           for s in JP GL CN; do
             if [ -d "all-artifacts/table-$s" ]; then
-              V_OUT=$(bash tool/other/version.sh $s ./info.json)
-              VER_TEXT=$(echo "$V_OUT" | grep "BA_VERSION_NAME" | cut -d' ' -f2)
-              VER_FLAT=$(echo "$V_OUT" | grep "FLATDATA_VERSION_NAME" | cut -d' ' -f2)
-              
               case $s in
-                JP) NAME="日服" ;;
-                GL) NAME="国际服" ;;
-                CN) NAME="国服" ;;
+                JP) 
+                  NAME="日服"
+                  VER_NAME="${{ steps.get_ver.outputs.JP_BA_VERSION_NAME }}"
+                  FD_NAME="${{ steps.get_ver.outputs.JP_FLATDATA_VERSION_NAME }}"
+                  ;;
+                GL) 
+                  NAME="国际服"
+                  VER_NAME="${{ steps.get_ver.outputs.GL_BA_VERSION_NAME }}"
+                  FD_NAME="${{ steps.get_ver.outputs.GL_FLATDATA_VERSION_NAME }}"
+                  ;;
+                CN) 
+                  NAME="国服"
+                  VER_NAME="${{ steps.get_ver.outputs.CN_BA_VERSION_NAME }}"
+                  FD_NAME="${{ steps.get_ver.outputs.CN_FLATDATA_VERSION_NAME }}"
+                  ;;
               esac
 
               git clone --depth 1 --branch $s git@github.com:roundRekt/BA-Assets-TableBundles.git "txt-$s"
               cd "all-artifacts/table-$s/bundle_raw"
-              zip -r "../../../txt-$s/${NAME}${VER_TEXT}.zip" DBSchema ExcelTable
+              zip -r "../../../txt-$s/${NAME}${VER_NAME}.zip" DBSchema ExcelTable
               cd ../../../
               cd "txt-$s"
               git add .
-              git diff --staged --quiet || (git commit -m "Update $NAME Text Assets ${VER_TEXT}" && git push origin $s)
+              git diff --staged --quiet || (git commit -m "Update $NAME Text Assets ${VER_NAME}" && git push origin $s)
               cd ..
               
               git clone --depth 1 --branch $s https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-FlatData.git "fd-$s"
               cd "all-artifacts/table-$s/flatdata_raw"
-              zip -j "../../../fd-$s/${NAME}${VER_FLAT}.zip" *
+              zip -j "../../../fd-$s/${NAME}${FD_NAME}.zip" *
               cd ../../../
               cd "fd-$s"
               git add .
-              git diff --staged --quiet || (git commit -m "Update $NAME FlatData Zip ${VER_FLAT}" && git push origin $s)
+              git diff --staged --quiet || (git commit -m "Update $NAME FlatData Zip ${FD_NAME}" && git push origin $s)
               cd ..
             fi
           done
