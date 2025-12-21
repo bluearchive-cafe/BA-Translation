@@ -117,7 +117,7 @@ jobs:
           python setup_flatdata.py ${{ matrix.server.id }}
           chmod +x update/update_table.sh
           update/update_table.sh ${{ matrix.server.id }}
-          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked ${{ matrix.server.id }} --db_key "${{ needs.setup.outputs.db_key }}"
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked ${{ matrix.server.id }}
 
       - name: Organize Artifacts
         if: steps.check.outputs.run == 'true' && success()
