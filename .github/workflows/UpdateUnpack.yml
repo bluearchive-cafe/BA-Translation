@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   setup:
-    name: 设置环境
+    name: Setup Environment
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -23,11 +23,14 @@ jobs:
       gl_sw: ${{ steps.detect.outputs.gl }}
       cn_sw: ${{ steps.detect.outputs.cn }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Clone Tool
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Clone Translation Tool
         run: git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
           
-      - id: detect
+      - name: Detect Trigger Source and Inputs
+        id: detect
         run: |
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             echo "jp=${{ github.event.client_payload.JP_enabled || 'false' }}" >> $GITHUB_OUTPUT
@@ -40,7 +43,8 @@ jobs:
           fi
           echo "db_key=${{ secrets.DB_DECRYPT_KEY }}" >> $GITHUB_OUTPUT
 
-      - id: set-matrix
+      - name: Generate Strategy Matrix
+        id: set-matrix
         run: |
           MATRIX=$(jq -nc \
             --arg jp "${{ steps.detect.outputs.jp }}" \
@@ -54,7 +58,7 @@ jobs:
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
   process:
-    name: 运行${{ matrix.server.name }}
+    name: Process ${{ matrix.server.name }}
     needs: setup
     runs-on: ubuntu-latest
     strategy:
@@ -62,27 +66,28 @@ jobs:
       matrix: 
         server: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Clone Tool
+      - name: Prepare Tool Environment
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* . && rm -rf tool
 
-      - name: Configure SSH
+      - name: Configure SSH Access
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
-      - name: Get Version
+      - name: Fetch Current Server Version
         id: v
         run: |
           V=$(bash other/version.sh ${{ matrix.server.id }} info.json | cut -d'=' -f2)
           echo "ver=$V" >> $GITHUB_OUTPUT
 
-      - name: Check Remote Version
+      - name: Verify Remote Version Status
         id: check
         run: |
           if [[ "${{ github.event_name }}" =~ (workflow|repository)_dispatch ]]; then
@@ -92,39 +97,45 @@ jobs:
             [ -f "check/${{ matrix.server.name }}${{ steps.v.outputs.ver }}.zip" ] && echo "run=false" >> $GITHUB_OUTPUT || echo "run=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install System Dependencies
+      - name: Install System Libraries
         if: steps.check.outputs.run == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev
 
-      - name: Install Python Dependencies
+      - name: Install Python Packages
         if: steps.check.outputs.run == 'true'
         run: pip install pysqlcipher3 sqlcipher3 -r requirements.txt
 
-      - name: Clone Server Repositories
+      - name: Clone Data Repositories
         if: steps.check.outputs.run == 'true'
         run: |
           git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git BA-FlatData
           git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:roundRekt/BA-Assets-TableBundles.git BA-Text
           [ "${{ matrix.server.id }}" = "CN" ] && mkdir -p Dumps && cp BA-FlatData/dump.cs Dumps/ || true
 
-      - name: Execute Scripts
+      - name: Run Setup FlatData
+        if: steps.check.outputs.run == 'true'
+        run: python setup_flatdata.py ${{ matrix.server.id }}
+
+      - name: Run Update Table Script
         if: steps.check.outputs.run == 'true'
         run: |
-          python setup_flatdata.py ${{ matrix.server.id }}
           chmod +x update/update_table.sh
           update/update_table.sh ${{ matrix.server.id }}
-          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked ${{ matrix.server.id }} --db_key "${{ needs.setup.outputs.db_key }}"
 
-      - name: Package Raw Data
+      - name: Run Unpack Excel Script
+        if: steps.check.outputs.run == 'true'
+        run: python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked ${{ matrix.server.id }} --db_key "${{ needs.setup.outputs.db_key }}"
+
+      - name: Organize Raw Data for Artifacts
         if: steps.check.outputs.run == 'true' && success()
         run: |
           mkdir -p workspace/bundle_raw workspace/flatdata_raw
           cp -r unpacked/* workspace/bundle_raw/
           cp -r Extracted/FlatData/* workspace/flatdata_raw/
 
-      - name: Upload Artifact
+      - name: Store Temporary Artifacts
         if: steps.check.outputs.run == 'true' && success()
         uses: actions/upload-artifact@v4
         with:
@@ -132,45 +143,52 @@ jobs:
           path: workspace/
 
   Final:
-    name: 上传文件
+    name: Final Commit
     needs: [setup, process]
     runs-on: ubuntu-latest
     if: always() && needs.setup.outputs.matrix != '[]' && !contains(needs.process.result, 'cancelled')
     env:
       GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
     steps:
-      - name: Git Config
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Git Identity
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Configure SSH
+      - name: Configure SSH Access
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
-      - name: Clone Tool
+      - name: Prepare Translation Tool
         run: git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
 
-      - name: Download All Available Artifacts
+      - name: Download Processed Artifacts
         uses: actions/download-artifact@v4
         with:
           path: all-artifacts
           pattern: table-*
           merge-multiple: false
 
-      - name: Commit Changes
+      - name: Package and Push Changes
         run: |
+
           for s in JP GL CN; do
             if [ -d "all-artifacts/table-$s" ]; then
-              VER=$(bash tool/other/version.sh $s tool/info.json | cut -d'=' -f2)
+              VER=$(bash tool/other/version.sh $s info.json | cut -d'=' -f2)
+              
               case $s in
                 JP) NAME="日服" ;;
                 GL) NAME="国际服" ;;
                 CN) NAME="国服" ;;
               esac
+
+              echo "Processing $NAME (Version: $VER)..."
 
               git clone --depth 1 --branch $s git@github.com:roundRekt/BA-Assets-TableBundles.git "txt-$s"
               cd "all-artifacts/table-$s/bundle_raw"
@@ -193,14 +211,3 @@ jobs:
               cd ..
             fi
           done
-
-  trigger:
-    name: Trigger Media
-    needs: [setup, Final]
-    runs-on: ubuntu-latest
-    if: always() && needs.Final.result == 'success'
-    steps:
-      - run: |
-          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/${{ github.repository }}/dispatches \
-          -d '{"event_type": "run-media-deployment","client_payload": {"JP_enabled": "${{ needs.setup.outputs.jp_sw }}","GL_enabled": "${{ needs.setup.outputs.gl_sw }}","CN_enabled": "${{ needs.setup.outputs.cn_sw }}"}}'
