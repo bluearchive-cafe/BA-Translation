@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   setup:
+    name: Setup Environment
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -40,16 +41,25 @@ jobs:
 
       - id: set-matrix
         run: |
-          MATRIX=$(jq -ncl --arg jp "${{ steps.detect.outputs.jp }}" --arg gl "${{ steps.detect.outputs.gl }}" --arg cn "${{ steps.detect.outputs.cn }}" \
-          '[ {id: "JP", name: "日服", enabled: $jp}, {id: "GL", name: "国际服", enabled: $gl}, {id: "CN", name: "国服", enabled: $cn} ] | map(select(.enabled == "true"))')
+          # 修正 jq 参数：-n (空输入), -c (紧凑输出)
+          MATRIX=$(jq -nc \
+            --arg jp "${{ steps.detect.outputs.jp }}" \
+            --arg gl "${{ steps.detect.outputs.gl }}" \
+            --arg cn "${{ steps.detect.outputs.cn }}" \
+            '[
+              {id: "JP", name: "日服", enabled: $jp},
+              {id: "GL", name: "国际服", enabled: $gl},
+              {id: "CN", name: "国服", enabled: $cn}
+            ] | map(select(.enabled == "true"))')
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
   process:
+    name: Process ${{ matrix.server.name }}
     needs: setup
     runs-on: ubuntu-latest
     if: needs.setup.outputs.matrix != '[]'
     strategy:
-      fail-fast: false
+      fail-fast: false # 关键：一个服失败，其他服继续跑
       matrix: 
         server: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
@@ -89,6 +99,7 @@ jobs:
           gh run upload --name "table-${{ matrix.server.id }}" workspace/*
 
   Final:
+    name: Final Commit
     needs: [setup, process]
     runs-on: ubuntu-latest
     if: always() && contains(needs.process.result, 'success')
@@ -104,14 +115,25 @@ jobs:
         run: |
           git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-FlatData.git fd
           for s in JP GL CN; do
-            gh run download --name "table-$s" --dir "art-$s" || continue
+            gh run download --name "table-$s" --dir "art-$s" || { echo "Skip $s"; continue; }
+            
             git clone --depth 1 --branch $s https://x-access-token:${GH_TOKEN}@github.com/beichen23333/BA-Text.git "txt-$s"
-            rsync -av "art-$s/" "txt-$s/" && rsync -av "art-$s/" "fd/"
-            cd "txt-$s" && git add . && (git diff --staged --quiet || (git commit -m "Update $s Text" && git push origin $s)) && cd ..
-            cd fd && git add . && (git diff --staged --quiet || (git commit -m "Update $s FlatData" && git push origin)) && cd ..
+            rsync -av "art-$s/" "txt-$s/"
+            rsync -av "art-$s/" "fd/"
+            
+            cd "txt-$s"
+            git add .
+            git diff --staged --quiet || (git commit -m "Update $s Text" && git push origin $s)
+            cd ..
+            
+            cd fd
+            git add .
+            git diff --staged --quiet || (git commit -m "Update $s FlatData" && git push origin)
+            cd ..
           done
 
   trigger:
+    name: Trigger Media
     needs: [setup, Final]
     runs-on: ubuntu-latest
     if: always() && needs.Final.result == 'success'
