@@ -62,6 +62,7 @@ jobs:
 
       - name: Run extraction script
         env:
+          PYTHONUNBUFFERED: "1"
           SSH_SECRETS: ${{ secrets.SSH_SECRETS }}
           JP_APK_CACHE_PATH: ${{ steps.restore-cache.outputs.cache-hit == 'true' && '/tmp/BlueArchive_JP.xapk' || '' }}
         run: |
