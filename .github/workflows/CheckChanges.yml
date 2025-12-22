@@ -71,7 +71,7 @@ jobs:
           fi
 
           TIME=$(date -d "+8 hours" "+%Y-%m-%d %H:%M:%S")
-          git add .
+          git add info.json index.json
           git commit -m "Update: $TIME"
           git push origin HEAD
 
