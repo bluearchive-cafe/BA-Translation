@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
+  repository_dispatch:
+    types: [APK]
+
 permissions:
   contents: write
 
@@ -18,10 +21,7 @@ jobs:
 
       - name: Clone repositories
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
-
-      - name: Move contents to current directory
-        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
           mv BlueArchive-Translation/* .
           rm -rf BlueArchive-Translation
 
@@ -33,56 +33,68 @@ jobs:
       - name: Install requirements
         run: pip install -r requirements.txt
 
-      - name: Update index
+      - name: Get Latest JP Version
+        id: get_ver
+        run: |
+          VERSION=$(python -c "from update.regions import JPServer; print(JPServer().get_latest_version())")
+          echo "latest_jp_ver=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Restore JP APK Cache
+        id: restore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/BlueArchive_JP.xapk
+          key: JP-APK-${{ steps.get_ver.outputs.latest_jp_ver }}
+
+      - name: Update Data
+        id: update_step
+        env: 
+          PYTHONUNBUFFERED: "1"
+          JP_APK_CACHE_PATH: ${{ steps.restore-cache.outputs.cache-hit == 'true' && '/tmp/BlueArchive_JP.xapk' || '' }}
+        run: |
+          python update_url.py info.json
+
+      - name: Save JP APK Cache
+        if: steps.update_step.outputs.jp_apk_path != '' && steps.restore-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.update_step.outputs.jp_apk_path }}
+          key: JP-APK-${{ steps.update_step.outputs.jp_version }}
+
+      - name: Commit and Dispatch
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
           curl -sS -f https://prod-noticeindex.bluearchiveyostar.com/prod/index.json | jq . > index.json
-
-      - name: Update Data
-        timeout-minutes: 6
-        continue-on-error: true
-        env: 
-          PYTHONUNBUFFERED: "1"
-        run: |
-          python update_url.py info.json
-
-      - name: Commit and Dispatch
-        run: |
+          
           CHANGES=$(git status --porcelain)
-          if [ -z "$CHANGES" ]; then
-            exit 0
-          fi
+          if [ -z "$CHANGES" ]; then exit 0; fi
 
-          JP_UPDATED=$(git diff info.json | grep -q '"JP"' && echo true || echo false)
+          JP_UPDATED=$([ -n "${{ steps.update_step.outputs.jp_apk_path }}" ] && echo true || echo false)
           GL_UPDATED=$(git diff info.json | grep -q '"GL"' && echo true || echo false)
           CN_UPDATED=$(git diff info.json | grep -q '"CN"' && echo true || echo false)
           INDEX_UPDATED=$(echo "$CHANGES" | grep -q 'index.json' && echo true || echo false)
 
           if [ "$INDEX_UPDATED" = "true" ]; then
-            curl -X POST "https://web.archive.org/save/https://prod-noticeindex.bluearchiveyostar.com/prod/index.json" \
-                 -d "url=https://prod-noticeindex.bluearchiveyostar.com/prod/index.json&capture_outlinks=on" > /dev/null || true
-            
             curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                  -H "Accept: application/vnd.github.v3+json" \
                  https://api.github.com/repos/${{ github.repository }}/dispatches \
                  -d '{"event_type": "Notic"}'
           fi
 
-          TIME=$(date -d "+8 hours" "+%Y-%m-%d %H:%M:%S")
           git add info.json index.json
-          git commit -m "Update: $TIME"
+          git commit -m "Update: $(date -d "+8 hours" "+%Y-%m-%d %H:%M:%S")"
           git push origin HEAD
 
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "Unpack", "client_payload": {"JP_enabled": $JP_UPDATED, "GL_enabled": $GL_UPDATED, "CN_enabled": $CN_UPDATED}}'
+            -d "{\"event_type\": \"Unpack\", \"client_payload\": {\"JP_enabled\": $JP_UPDATED, \"GL_enabled\": $GL_UPDATED, \"CN_enabled\": $CN_UPDATED}}"
 
           if [ "$JP_UPDATED" = "true" ]; then
             curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               https://api.github.com/repos/${{ github.repository }}/dispatches \
-              -d '{"event_type": "APK"}'
+              -d "{\"event_type\": \"APK\", \"client_payload\": {\"version\": \"${{ steps.update_step.outputs.jp_version }}\"}}"
           fi
