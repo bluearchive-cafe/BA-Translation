@@ -21,9 +21,9 @@ jobs:
 
       - name: Clone repositories
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
-          mv BlueArchive-Translation/* .
-          rm -rf BlueArchive-Translation
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git temp_src
+          cp -r temp_src/* .
+          rm -rf temp_src
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -68,13 +68,18 @@ jobs:
           
           curl -sS -f https://prod-noticeindex.bluearchiveyostar.com/prod/index.json | jq . > index.json
           
-          CHANGES=$(git status --porcelain)
-          if [ -z "$CHANGES" ]; then exit 0; fi
+          git add info.json index.json
+          
+          CHANGES=$(git status --porcelain info.json index.json)
+          if [ -z "$CHANGES" ]; then
+            echo "No changes detected in data files. Skipping."
+            exit 0
+          fi
 
           JP_UPDATED=$([ -n "${{ steps.update_step.outputs.jp_apk_path }}" ] && echo true || echo false)
-          GL_UPDATED=$(git diff info.json | grep -q '"GL"' && echo true || echo false)
-          CN_UPDATED=$(git diff info.json | grep -q '"CN"' && echo true || echo false)
-          INDEX_UPDATED=$(echo "$CHANGES" | grep -q 'index.json' && echo true || echo false)
+          GL_UPDATED=$(git diff --cached info.json | grep -q '"GL"' && echo true || echo false)
+          CN_UPDATED=$(git diff --cached info.json | grep -q '"CN"' && echo true || echo false)
+          INDEX_UPDATED=$(git diff --cached index.json --quiet || echo true)
 
           if [ "$INDEX_UPDATED" = "true" ]; then
             curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -83,7 +88,6 @@ jobs:
                  -d '{"event_type": "Notic"}'
           fi
 
-          git add info.json index.json
           git commit -m "Update: $(date -d "+8 hours" "+%Y-%m-%d %H:%M:%S")"
           git push origin HEAD
 
