@@ -1,4 +1,4 @@
-name: Check Changes
+Name: Check Changes
 
 on:
   schedule:
@@ -59,14 +59,22 @@ jobs:
           echo "gl_v=$GL_V" >> $GITHUB_OUTPUT
           echo "cn_v=$CN_V" >> $GITHUB_OUTPUT
 
+      - name: Determine Cache Paths
+        id: cache_paths
+        run: |
+          PATHS=""
+          [ -f /tmp/BlueArchive_JP.xapk ] && PATHS+="/tmp/BlueArchive_JP.xapk"$'\n'
+          [ -f /tmp/BlueArchive_GL.xapk ] && PATHS+="/tmp/BlueArchive_GL.xapk"$'\n'
+          [ -f /tmp/BlueArchive_CN.apk ] && PATHS+="/tmp/BlueArchive_CN.apk"
+          echo "paths<<EOF" >> $GITHUB_OUTPUT
+          echo "$PATHS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Save APK Caches
-        if: steps.update_step.outputs.jp_apk_path != '' || steps.update_step.outputs.gl_apk_path != '' || steps.update_step.outputs.cn_apk_path != ''
+        if: steps.cache_paths.outputs.paths != ''
         uses: actions/cache/save@v4
         with:
-          path: |
-            /tmp/BlueArchive_JP.xapk
-            /tmp/BlueArchive_GL.xapk
-            /tmp/BlueArchive_CN.apk
+          path: ${{ steps.cache_paths.outputs.paths }}
           key: APK-CACHE-${{ steps.final_ver.outputs.jp_v }}-${{ steps.final_ver.outputs.gl_v }}-${{ steps.final_ver.outputs.cn_v }}
 
       - name: Commit Changes
