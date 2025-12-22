@@ -2,7 +2,7 @@ name: Check Changes
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 permissions:
   contents: write
@@ -10,21 +10,11 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: false
-
-      - name: Clone repository
-        run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git
-
-      - name: Move contents to current directory
-        run: |
-          mv BlueArchive-Translation/* .
-          rm -rf BlueArchive-Translation
+          token: ${{ secrets.APK_SRC_REPO }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -32,111 +22,51 @@ jobs:
           python-version: '3.12'
 
       - name: Install requirements
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
-      - name: Login
+      - name: Update Data
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-
-      - name: Fetch latest index.json
-        run: |
+          
           curl -sS -f https://prod-noticeindex.bluearchiveyostar.com/prod/index.json | jq . > index.json
-
-      - name: Check for changes
-        run: |
-          git add index.json
-          if git diff --cached --quiet; then
-            echo "No changes detected."
-          else
-            curl -X POST "https://web.archive.org/save/https://prod-noticeindex.bluearchiveyostar.com/prod/index.json" \
-               -H "Content-Type: application/x-www-form-urlencoded" \
-               --data-urlencode "url=https://prod-noticeindex.bluearchiveyostar.com/prod/index.json" \
-               --data-urlencode "capture_outlinks=on" > /dev/null
-
-            curl -X POST \
-               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-               -H "Accept: application/vnd.github.v3+json" \
-               https://api.github.com/repos/${{ github.repository }}/dispatches \
-               -d '{"event_type": "Notic"}'
-          fi
-   
-      - name: Get UTC timestamp
-        id: get_time
-        run: echo "time=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_OUTPUT"
-
-      - name: Commit Changes
-        uses: qoomon/actions--create-commit@v1
-        with:
-          message: ${{ steps.get_time.outputs.time }}
-          skip-empty: true
-
-      - name: Push Changes
-        run: git push
-
-      - name: Update server
-        timeout-minutes: 5
-        continue-on-error: true
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: |
           python update_url.py info.json
 
-      - name: Check if info.json was modified
-        id: check-changes
+      - name: Commit and Dispatch
         run: |
-          git add info.json
-          
-          JP_UPDATED=false
-          GL_UPDATED=false
-          CN_UPDATED=false
-          UPDATE_DETECTED=false
-          
-          if git diff --cached --quiet; then
-            echo "update_detected=false" >> $GITHUB_ENV
-          else
-            UPDATE_DETECTED=true
-            
-            git diff --cached info.json > changes.diff
-            
-            if grep -q 'CN' changes.diff; then
-              CN_UPDATED=true
-            fi
-            
-            if grep -q 'JP' changes.diff; then
-              JP_UPDATED=true
-            fi
-            
-            if grep -q 'GL' changes.diff; then
-              GL_UPDATED=true
-            fi
-            
-            echo "JP_updated=$JP_UPDATED" >> $GITHUB_ENV
-            echo "GL_updated=$GL_UPDATED" >> $GITHUB_ENV
-            echo "CN_updated=$CN_UPDATED" >> $GITHUB_ENV
-            echo "update_detected=$UPDATE_DETECTED" >> $GITHUB_ENV
+          CHANGES=$(git status --porcelain)
+          if [ -z "$CHANGES" ]; then
+            exit 0
           fi
 
-      - name: Commit and push changes if info.json was modified
-        if: env.update_detected == 'true'
-        run: |
-          git commit -m "更新悠星服务器URL"
-          git push origin HEAD
-          
-          JP_ENABLED=${{ env.JP_updated }}
-          GL_ENABLED=${{ env.GL_updated }}
-          CN_ENABLED=${{ env.CN_updated }}
-          
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "Unpack","client_payload": {"JP_enabled": '$JP_ENABLED',"GL_enabled": '$GL_ENABLED',"CN_enabled": '$CN_ENABLED'}}'
+          JP_UPDATED=$(git diff info.json | grep -q '"JP"' && echo true || echo false)
+          GL_UPDATED=$(git diff info.json | grep -q '"GL"' && echo true || echo false)
+          CN_UPDATED=$(git diff info.json | grep -q '"CN"' && echo true || echo false)
+          INDEX_UPDATED=$(echo "$CHANGES" | grep -q 'index.json' && echo true || echo false)
 
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          if [ "$INDEX_UPDATED" = "true" ]; then
+            curl -X POST "https://web.archive.org/save/https://prod-noticeindex.bluearchiveyostar.com/prod/index.json" \
+                 -d "url=https://prod-noticeindex.bluearchiveyostar.com/prod/index.json&capture_outlinks=on" > /dev/null || true
+            
+            curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                 -H "Accept: application/vnd.github.v3+json" \
+                 https://api.github.com/repos/${{ github.repository }}/dispatches \
+                 -d '{"event_type": "Notic"}'
+          fi
+
+          TIME=$(date -d "+8 hours" "+%Y-%m-%d %H:%M:%S")
+          git add .
+          git commit -m "Update: $TIME"
+          git push origin HEAD
+
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "APK"}'
+            -d '{"event_type": "Unpack", "client_payload": {"JP_enabled": $JP_UPDATED, "GL_enabled": $GL_UPDATED, "CN_enabled": $CN_UPDATED}}'
+
+          if [ "$JP_UPDATED" = "true" ]; then
+            curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/${{ github.repository }}/dispatches \
+              -d '{"event_type": "APK"}'
+          fi
