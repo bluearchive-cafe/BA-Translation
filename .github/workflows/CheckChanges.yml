@@ -82,7 +82,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          python check.py info.json
+          python update_url.py info.json
 
       - name: Check if info.json was modified
         id: check-changes
