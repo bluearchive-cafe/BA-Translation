@@ -1,4 +1,4 @@
-name: Update-Unpack Excel
+Name: Update-Unpack Excel
 
 on:
   workflow_dispatch:
@@ -78,15 +78,7 @@ jobs:
         run: |
           bash other/version.sh ${{ matrix.server.id }} info.json
           V_BA=$(grep '${{ matrix.server.id }}_BA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
-          V_FL=$(grep '${{ matrix.server.id }}_FLATDATA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
           echo "ver=$V_BA" >> $GITHUB_OUTPUT
-          echo "fl_ver=$V_FL" >> $GITHUB_OUTPUT
-
-      - name: Restore FlatData Cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ./Extracted
-          key: ${{ matrix.server.id }}${{ steps.v.outputs.fl_ver }}
 
       - name: Verify Remote Version Status
         id: check
@@ -104,6 +96,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev
           pip install pysqlcipher3 sqlcipher3 -r requirements.txt
+
+      - name: Clone and Unpack FlatData
+        if: steps.check.outputs.run == 'true'
+        run: |
+          git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git flat_repo
+          mkdir -p Extracted
+          ZIP_FILE=$(find flat_repo -name "*.zip" | head -n 1)
+          if [ -f "$ZIP_FILE" ]; then
+            unzip -o "$ZIP_FILE" -d ./Extracted
+          else
+            echo "FlatData ZIP not found"
+            exit 1
+          fi
 
       - name: Clone Text Repository
         if: steps.check.outputs.run == 'true'
