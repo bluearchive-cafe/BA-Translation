@@ -135,7 +135,7 @@ jobs:
 
   setup_flatdata:
     needs: check_changes
-    if: needs.check_changes.outputs.matrix != '[]' && needs.check_changes.outputs.matrix != ''
+    if: needs.check_changes.outputs.matrix != '[]' && needs.check_changes.outputs.matrix != '' && (needs.check_changes.outputs.jp_updated == 'true' || needs.check_changes.outputs.gl_updated == 'true' || needs.check_changes.outputs.cn_updated == 'true')
     strategy:
       fail-fast: false
       matrix:
