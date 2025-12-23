@@ -24,6 +24,13 @@ jobs:
         with:
           token: ${{ secrets.APK_SRC_REPO }}
 
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
       - name: Clone repositories
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git temp_src
@@ -82,7 +89,7 @@ jobs:
                 V_BA=$(grep 'JP_BA_VERSION_NAME' version_out.tmp | cut -d'=' -f2)
                 ZIP_NAME="日服${V_BA}.zip"
                 
-                git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/roundRekt/BA-Assets-TableBundles.git asset_repo
+                git clone --depth 1 --branch JP git@github.com:roundRekt/BA-Assets-TableBundles.git asset_repo
                 
                 if [ -f "asset_repo/$ZIP_NAME" ]; then
                   echo "$ZIP_NAME already exists, skipping JP update."
