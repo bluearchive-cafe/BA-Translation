@@ -115,7 +115,7 @@ jobs:
 
       - name: Run Extraction
         run: |
-          python tools/extract.py \
+          python -m tools.extract \
             "Assets-Repo/${{ matrix.name }}${{ steps.version_check.outputs.new_ver }}.zip" \
             "Assets-Repo/${{ matrix.name }}${{ steps.version_check.outputs.old_ver }}.zip" \
             "./BA-Text" other/config.json 10
