@@ -2,6 +2,10 @@ name: Update-Extract new text
 
 on:
   workflow_dispatch:
+    inputs:
+      JP_Enabled: { type: boolean, default: false }
+      GL_Enabled: { type: boolean, default: false }
+      CN_Enabled: { type: boolean, default: false }
   repository_dispatch:
     types: [Extract]
 
@@ -9,32 +13,78 @@ permissions:
   contents: write
 
 jobs:
-  deploy:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      run_jobs: ${{ steps.set-matrix.outputs.run_jobs }}
     steps:
-      - name: Checkout code
+      - name: Detect Trigger Source
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "jp=${{ github.event.client_payload.JP_enabled || 'false' }}" >> $GITHUB_OUTPUT
+            echo "gl=${{ github.event.client_payload.GL_enabled || 'false' }}" >> $GITHUB_OUTPUT
+            echo "cn=${{ github.event.client_payload.CN_enabled || 'false' }}" >> $GITHUB_OUTPUT
+          else
+            echo "jp=${{ github.event.inputs.JP_Enabled }}" >> $GITHUB_OUTPUT
+            echo "gl=${{ github.event.inputs.GL_Enabled }}" >> $GITHUB_OUTPUT
+            echo "cn=${{ github.event.inputs.CN_Enabled }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Strategy Matrix
+        id: set-matrix
+        run: |
+          MATRIX=$(jq -nc \
+            --arg jp "${{ steps.detect.outputs.jp }}" \
+            --arg gl "${{ steps.detect.outputs.gl }}" \
+            --arg cn "${{ steps.detect.outputs.cn }}" \
+            '[
+              {id: "JP", name: "日服", enabled: $jp},
+              {id: "GL", name: "国际服", enabled: $gl},
+              {id: "CN", name: "国服", enabled: $cn}
+            ] | map(select(.enabled == "true" or .enabled == true))')
+          
+          COUNT=$(echo $MATRIX | jq '. | length')
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "run_jobs=$COUNT" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: setup
+    if: needs.setup.outputs.run_jobs != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
+    
+    name: Extract (${{ matrix.id }})
+    steps:
+      - name: Checkout Tool Repository
         uses: actions/checkout@v4
         with:
-          submodules: false
           fetch-depth: 0
 
-      - name: Clone repository
+      - name: Configure SSH Access
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git BlueArchive-Translation
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
-      - name: Move contents to current directory
+      - name: Clone Required Repositories
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git BlueArchive-Translation
+          git clone --depth 1 --branch ${{ matrix.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git BA-Text
+          git clone --depth 1 --branch ${{ matrix.id }} git@github.com:roundRekt/BA-Assets-TableBundles.git Assets-Repo
+
+      - name: Prepare Workspace
         run: |
           mv BlueArchive-Translation/* .
           rm -rf BlueArchive-Translation
+          rm -rf BA-Text/Revise BA-Text/New BA-Text/Translation
 
-      - name: Delete Revise and New folders
-        run: |
-          rm -rf BA-Text/Revise
-          rm -rf BA-Text/New
-          rm -rf BA-Text/Translation
-
-      - name: Set up Python 3.13
+      - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -44,78 +94,46 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Get new version
-        id: new_ver
+      - name: Get Version Info
+        id: version_check
         run: |
-          echo "Current info.json content:"
-          cat info.json
-          echo "Running version.sh on current info.json:"
-          bash other/version.sh JP info.json >> "$GITHUB_OUTPUT"
-
-      - name: Find last meaningful change in info.json
-        id: prev_ver
-        run: |
+          NEW_VER=$(bash other/version.sh ${{ matrix.id }} info.json | grep "${{ matrix.id }}_BA_VERSION_NAME" | cut -d'=' -f2)
+          echo "new_ver=$NEW_VER" >> $GITHUB_OUTPUT
+          
           CURRENT_CONTENT=$(cat info.json)
-          
-          PREV_COMMIT=""
-          for commit in $(git log --pretty=format:"%H" -- info.json); do
-            PREV_CONTENT=$(git show $commit:info.json 2>/dev/null || echo "")
-            
-            if [ "$PREV_CONTENT" != "$CURRENT_CONTENT" ] && [ -n "$PREV_CONTENT" ]; then
-              PREV_COMMIT=$commit
-              break
+          PREV_COMMIT=$(git log --pretty=format:"%H" -n 50 -- info.json | while read commit; do
+            if [ "$(git show $commit:info.json 2>/dev/null)" != "$CURRENT_CONTENT" ]; then
+              echo $commit; break
             fi
-          done
+          done)
           
-          if [ -z "$PREV_COMMIT" ]; then
-            echo "No previous version with different content found"
-            exit 1
-          fi
+          if [ -z "$PREV_COMMIT" ]; then exit 1; fi
           
-          echo "Found meaningful previous commit: $PREV_COMMIT"
           git show $PREV_COMMIT:info.json > /tmp/prev_info.json
-          echo "Previous info.json content:"
-          cat /tmp/prev_info.json
-          
-          echo "Running version.sh on previous info.json:"
-          bash other/version.sh JP /tmp/prev_info.json >> "$GITHUB_OUTPUT"
-          echo "prev_commit=$PREV_COMMIT" >> "$GITHUB_OUTPUT"
+          OLD_VER=$(bash other/version.sh ${{ matrix.id }} /tmp/prev_info.json | grep "${{ matrix.id }}_BA_VERSION_NAME" | cut -d'=' -f2)
+          echo "old_ver=$OLD_VER" >> $GITHUB_OUTPUT
 
-      - name: Check version
+      - name: Run Extraction
         run: |
-          new="${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }}"
-          old="${{ steps.prev_ver.outputs.JP_BA_VERSION_NAME }}"
-          if [[ "$new" == "$old" ]]; then
-            echo "ERROR: Version numbers are the same but content differs!"
-            echo "Current version: $new"
-            echo "Previous version: $old"
-            echo "Current info.json:"
-            cat info.json
-            echo "Previous info.json:"
-            cat /tmp/prev_info.json
-          fi
-          echo "Version changed: $old -> $new"
+          python tools/extract.py \
+            "Assets-Repo/${{ matrix.name }}${{ steps.version_check.outputs.new_ver }}.zip" \
+            "Assets-Repo/${{ matrix.name }}${{ steps.version_check.outputs.old_ver }}.zip" \
+            "./BA-Text" other/config.json 10
 
-      - name: Run extract
-        run: |
-          python tools/extract.py "BA-Text/日服${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }}.zip" "BA-Text/日服${{ steps.prev_ver.outputs.JP_BA_VERSION_NAME }}.zip" "./BA-Text" other/config.json 10
-
-      - name: Commit extract text
+      - name: Commit and Push to BA-Text
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          
           cd BA-Text
           git add .
+          git commit -m "Extract ${{ matrix.id }} text: ${{ steps.version_check.outputs.new_ver }} (from ${{ steps.version_check.outputs.old_ver }})" || exit 0
+          git push origin ${{ matrix.id }}
 
-          git commit -m "Extract text for version ${{ steps.new_ver.outputs.JP_BA_VERSION_NAME }} (from ${{ steps.prev_ver.outputs.JP_BA_VERSION_NAME }})"
-          git push origin JP
-
-      - name: Deploy Translation
+      - name: Trigger Translation Dispatch
+        if: github.event_name == 'repository_dispatch'
         run: |
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "Translation","client_payload": {"file_path": "BA-Text/New","output_path": "BA-Text/Translation", "batch_size": "20","max_workers": "10"}}'
+            -d '{"event_type": "Translation","client_payload": {"region": "${{ matrix.id }}", "version": "${{ steps.version_check.outputs.new_ver }}"}}'

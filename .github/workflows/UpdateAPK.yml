@@ -41,32 +41,9 @@ jobs:
           pip install -r requirements.txt
           pip install androguard
 
-      - name: Get JP Version
-        id: get_ver
-        run: |
-          PAYLOAD_VER="${{ github.event.client_payload.version }}"
-          if [ -n "$PAYLOAD_VER" ]; then
-            VERSION=$PAYLOAD_VER
-          else
-            VERSION=$(python -c "from update.regions import JPServer; print(JPServer().get_latest_version())")
-          fi
-          echo "jp_ver=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Restore JP APK Cache
-        id: restore-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/BlueArchive_JP.xapk
-          key: APK-CACHE-JP-${{ steps.get_ver.outputs.jp_ver }}
-          restore-keys: APK-CACHE-JP-
-
       - name: Run extraction script
         env:
           PYTHONUNBUFFERED: "1"
           SSH_SECRETS: ${{ secrets.SSH_SECRETS }}
-          JP_APK_CACHE_PATH: /tmp/BlueArchive_JP.xapk
         run: |
-          if [ ! -f "/tmp/BlueArchive_JP.xapk" ]; then
-            echo "Warning: Cache not found at /tmp/BlueArchive_JP.xapk"
-          fi
           python update_apk.py

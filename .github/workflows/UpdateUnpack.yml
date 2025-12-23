@@ -1,4 +1,4 @@
-name: Update-Unpack Excel
+Name: Update-Unpack Excel
 
 on:
   workflow_dispatch:
@@ -78,7 +78,9 @@ jobs:
         run: |
           bash other/version.sh ${{ matrix.server.id }} info.json
           V_BA=$(grep '${{ matrix.server.id }}_BA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
+          V_FL=$(grep '${{ matrix.server.id }}_FLATDATA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
           echo "ver=$V_BA" >> $GITHUB_OUTPUT
+          echo "fl_ver=$V_FL" >> $GITHUB_OUTPUT
 
       - name: Verify Remote Version Status
         id: check
@@ -102,11 +104,11 @@ jobs:
         run: |
           git clone --depth 1 --branch ${{ matrix.server.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git flat_repo
           mkdir -p Extracted
-          ZIP_FILE=$(find flat_repo -name "*.zip" | head -n 1)
-          if [ -f "$ZIP_FILE" ]; then
-            unzip -o "$ZIP_FILE" -d ./Extracted
+          ZIP_NAME="${{ matrix.server.name }}${{ steps.v.outputs.fl_ver }}.zip"
+          if [ -f "flat_repo/$ZIP_NAME" ]; then
+            unzip -o "flat_repo/$ZIP_NAME" -d ./Extracted
           else
-            echo "FlatData ZIP not found"
+            echo "FlatData ZIP $ZIP_NAME not found"
             exit 1
           fi
 
@@ -189,3 +191,11 @@ jobs:
               cd ..
             fi
           done
+
+      - name: Trigger Extract Dispatch
+        if: github.event_name == 'repository_dispatch' && success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: Extract
+          client-payload: '{"JP_enabled": "${{ github.event.client_payload.JP_enabled }}", "GL_enabled": "${{ github.event.client_payload.GL_enabled }}", "CN_enabled": "${{ github.event.client_payload.CN_enabled }}"}'

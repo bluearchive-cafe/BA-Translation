@@ -116,26 +116,38 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+      
       - name: Clone Tool
         run: |
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* . && rm -rf tool
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev
           pip install pysqlcipher3 sqlcipher3 -r requirements.txt
+
+      - name: Get Version info
+        id: v
+        run: |
+          bash other/version.sh ${{ matrix.server.id }} info.json
+          FL_VER=$(grep "${{ matrix.server.id }}_FLATDATA_VERSION_NAME" $GITHUB_OUTPUT | cut -d'=' -f2)
+          echo "fl_ver=$FL_VER" >> $GITHUB_OUTPUT
+
       - name: Run Setup
         run: python setup_flatdata.py ${{ matrix.server.id }}
+
       - name: Package and Push
         env:
           GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
         run: |
-          ZIP_NAME="${{ matrix.server.name }}${{ needs.check_changes.outputs.jp_v }}.zip"
+          ZIP_NAME="${{ matrix.server.name }}${{ steps.v.outputs.fl_ver }}.zip"
           cd Extracted && zip -r "../$ZIP_NAME" . && cd ..
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
