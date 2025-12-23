@@ -2,7 +2,7 @@ name: Check Changes
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -136,7 +136,7 @@ jobs:
           JP_AC_VER: ${{ env.JP_AC_VER }}
         run: |
           export PYTHONPATH=$PYTHONPATH:.
-          python update_status.py
+          python -m update.update_status
 
       - name: Status and Dispatch
         id: status
