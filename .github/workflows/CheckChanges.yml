@@ -17,7 +17,6 @@ jobs:
       jp_updated: ${{ env.JP_updated }}
       gl_updated: ${{ env.GL_updated }}
       cn_updated: ${{ env.CN_updated }}
-      jp_v: ${{ steps.final_ver.outputs.jp_v }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,11 +42,6 @@ jobs:
         env: 
           PYTHONUNBUFFERED: "1"
         run: python update_url.py info.json
-
-      - name: Get Final Versions
-        id: final_ver
-        run: |
-          echo "jp_v=$(jq -r '.JP.APKVersionName // "unknown"' info.json)" >> $GITHUB_OUTPUT
 
       - name: Commit Changes
         id: commit_check
