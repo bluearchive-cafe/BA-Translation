@@ -1,4 +1,4 @@
-Name: Check Changes
+name: Check Changes
 
 on:
   schedule:
