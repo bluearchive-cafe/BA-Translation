@@ -93,7 +93,7 @@ jobs:
                 
                 if [ -f "asset_repo/$ZIP_NAME" ]; then
                   echo "$ZIP_NAME already exists, skipping JP update."
-                  JP_UPDATED=false
+                  JP_UPDATED_TEXT=false
                 else
                   NEW_CATALOG_URL=$(jq -r '.JP.AddressableCatalogUrl' info.json)
                   TEST_URL="${NEW_CATALOG_URL}/TableBundles/TableCatalog.bytes"
@@ -101,7 +101,7 @@ jobs:
                   
                   if [ "$STATUS_CODE" != "200" ]; then
                     echo "Test URL failed with status $STATUS_CODE: $TEST_URL"
-                    JP_UPDATED=false
+                    JP_UPDATED_TEXT=false
                   fi
                 fi
               fi
@@ -113,6 +113,7 @@ jobs:
             AC_VER=$(echo "$AC_URL" | sed 's/.*\///')
 
             echo "JP_updated=$JP_UPDATED" >> $GITHUB_ENV
+            echo "JP_updated_text=$JP_UPDATED" >> $GITHUB_ENV
             echo "GL_updated=$GL_UPDATED" >> $GITHUB_ENV
             echo "CN_updated=$CN_UPDATED" >> $GITHUB_ENV
             echo "APK_VERSION_CHANGED=$APK_VERSION_CHANGED" >> $GITHUB_ENV
@@ -219,7 +220,7 @@ jobs:
     if: |
       always() && 
       needs.check_changes.outputs.changed == 'true' && 
-      (needs.check_changes.outputs.jp_updated == 'true' || needs.check_changes.outputs.gl_updated == 'true' || needs.check_changes.outputs.cn_updated == 'true')
+      (needs.check_changes.outputs.JP_updated_text == 'true' || needs.check_changes.outputs.gl_updated == 'true' || needs.check_changes.outputs.cn_updated == 'true')
     steps:
       - name: Dispatch Unpack
         run: |
