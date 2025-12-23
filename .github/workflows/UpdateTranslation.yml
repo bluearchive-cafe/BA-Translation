@@ -49,7 +49,7 @@ jobs:
 
       - name: Clone repositories
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
+          git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
           git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
 
       - name: Move contents to current directory
