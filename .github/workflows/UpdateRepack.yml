@@ -65,7 +65,7 @@ jobs:
         run: |
           git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git flat_repo
           mkdir -p Extracted
-          ZIP_NAME="JP${{ steps.v.outputs.fl_ver }}.zip"
+          ZIP_NAME="日服${{ steps.v.outputs.fl_ver }}.zip"
           if [ -f "flat_repo/$ZIP_NAME" ]; then
             unzip -o "flat_repo/$ZIP_NAME" -d ./Extracted
           else
