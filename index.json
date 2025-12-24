@@ -33,11 +33,72 @@
     "EndDate": "2025-12-24T19:00:00",
     "Text": "定期メンテナンス中"
   },
-  "Banners": [],
-  "ServerStatus": 7,
-  "LatestClientVersion": "1.63.384227",
-  "LatestAndroidClientVersion": "1.63.384227",
-  "LatestIosClientVersion": "1.63.384227",
+  "Banners": [
+    {
+      "BannerId": 792,
+      "StartDate": "2025-12-24T11:08:27",
+      "EndDate": "2026-01-07T10:59:59",
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/Banner/792/1040/",
+      "FileName": [
+        "Lobby_Banner_20251224_01_290946381.png"
+      ],
+      "LinkedLobbyBannerId": 911,
+      "BannerType": 1,
+      "BannerDisplayType": 0
+    },
+    {
+      "BannerId": 793,
+      "StartDate": "2025-12-24T11:09:33",
+      "EndDate": "2026-01-07T10:59:59",
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/Banner/793/1047/",
+      "FileName": [
+        "Lobby_Banner_20251224_02_41190333.png"
+      ],
+      "LinkedLobbyBannerId": 912,
+      "BannerType": 1,
+      "BannerDisplayType": 0
+    },
+    {
+      "BannerId": 799,
+      "StartDate": "2025-12-24T12:37:21",
+      "EndDate": "2026-01-14T10:59:59",
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/Banner/799/1048/",
+      "FileName": [
+        "Event_Banner_853_Jp_78845406.png"
+      ],
+      "LinkedLobbyBannerId": 853,
+      "BannerType": 0,
+      "BannerDisplayType": 0
+    },
+    {
+      "BannerId": 802,
+      "StartDate": "2025-12-24T12:38:32",
+      "EndDate": "2026-01-07T10:59:59",
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/Banner/802/1051/",
+      "FileName": [
+        "Lobby_Banner_Archive_484129847.png"
+      ],
+      "LinkedLobbyBannerId": 3100,
+      "BannerType": 1,
+      "BannerDisplayType": 0
+    },
+    {
+      "BannerId": 803,
+      "StartDate": "2025-12-24T12:39:02",
+      "EndDate": "2025-12-31T10:59:59",
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/Banner/803/1052/",
+      "FileName": [
+        "Event_Banner_Mini_60000_Jp_285744395.png"
+      ],
+      "LinkedLobbyBannerId": 60016,
+      "BannerType": 22,
+      "BannerDisplayType": 0
+    }
+  ],
+  "ServerStatus": 5,
+  "LatestClientVersion": "1.64.391335",
+  "LatestAndroidClientVersion": "1.64.391335",
+  "LatestIosClientVersion": "1.64.391335",
   "GachaProbabilityDisplay": [
     {
       "GachaProbabilityDisplayId": 62,
@@ -91,6 +152,30 @@
       "GachaProbabilityDisplayId": 515,
       "Url": "https://prod-notice.bluearchiveyostar.com/prod/GachaProbabilityDisplay/515/index.html",
       "LinkedLobbyBannerId": 3100,
+      "GachaDisplayTag": -1
+    },
+    {
+      "GachaProbabilityDisplayId": 529,
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/GachaProbabilityDisplay/529/index.html",
+      "LinkedLobbyBannerId": 910,
+      "GachaDisplayTag": -1
+    },
+    {
+      "GachaProbabilityDisplayId": 530,
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/GachaProbabilityDisplay/530/index.html",
+      "LinkedLobbyBannerId": 911,
+      "GachaDisplayTag": -1
+    },
+    {
+      "GachaProbabilityDisplayId": 531,
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/GachaProbabilityDisplay/531/index.html",
+      "LinkedLobbyBannerId": 912,
+      "GachaDisplayTag": -1
+    },
+    {
+      "GachaProbabilityDisplayId": 532,
+      "Url": "https://prod-notice.bluearchiveyostar.com/prod/GachaProbabilityDisplay/532/index.html",
+      "LinkedLobbyBannerId": 7000,
       "GachaDisplayTag": -1
     }
   ],
