@@ -99,18 +99,12 @@ jobs:
         run: |
           NEW_VER=$(bash other/version.sh ${{ matrix.id }} info.json | grep "${{ matrix.id }}_BA_VERSION_NAME" | cut -d'=' -f2)
           echo "new_ver=$NEW_VER" >> $GITHUB_OUTPUT
-          
-          CURRENT_CONTENT=$(cat info.json)
-          PREV_COMMIT=$(git log --pretty=format:"%H" -n 50 -- info.json | while read commit; do
-            if [ "$(git show $commit:info.json 2>/dev/null)" != "$CURRENT_CONTENT" ]; then
-              echo $commit; break
-            fi
-          done)
-          
-          if [ -z "$PREV_COMMIT" ]; then exit 1; fi
-          
-          git show $PREV_COMMIT:info.json > /tmp/prev_info.json
-          OLD_VER=$(bash other/version.sh ${{ matrix.id }} /tmp/prev_info.json | grep "${{ matrix.id }}_BA_VERSION_NAME" | cut -d'=' -f2)
+
+          if git show HEAD~1:info.json > /tmp/prev_info.json 2>/dev/null; then
+            OLD_VER=$(bash other/version.sh ${{ matrix.id }} /tmp/prev_info.json | grep "${{ matrix.id }}_BA_VERSION_NAME" | cut -d'=' -f2)
+          else
+            OLD_VER="unknown"
+          fi
           echo "old_ver=$OLD_VER" >> $GITHUB_OUTPUT
 
       - name: Run Extraction
