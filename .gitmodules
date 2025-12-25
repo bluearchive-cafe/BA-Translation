@@ -1,0 +1,3 @@
+[submodule "assets/beichen"]
+	path = assets/beichen
+	url = git@github.com:beichen23333/beichen.git
