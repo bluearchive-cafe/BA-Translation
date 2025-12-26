@@ -1,0 +1,55 @@
+name: Check Update
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare Tool Environment
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
+          cp -r tool/* . && rm -rf tool
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Update Script
+        id: run_script
+        run: python update_url.py
+
+      - name: Print Outputs
+        run: |
+          echo "JP Version Changed: ${{ steps.run_script.outputs.jp_version_changed }}"
+          echo "JP Server Info Name: ${{ steps.run_script.outputs.jp_server_info_name }}"
+          echo "JP Addressable Name: ${{ steps.run_script.outputs.jp_addressable_name }}"
+          echo "GL Version Changed: ${{ steps.run_script.outputs.gl_version_changed }}"
+          echo "CN Version Changed: ${{ steps.run_script.outputs.cn_version_changed }}"
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add info_jp.json info_gl.json info_cn.json
+          if git diff --staged --quiet; then
+            echo "No file changes to commit."
+          else
+            git commit -m "Update: JP(${{ steps.run_script.outputs.jp_version_changed }}) GL(${{ steps.run_script.outputs.gl_version_changed }}) CN(${{ steps.run_script.outputs.cn_version_changed }})"
+            git push
+          fi
