@@ -80,9 +80,11 @@ jobs:
       - name: Get Version info
         id: v
         run: |
-          bash other/version.sh ${{ matrix.server.id }} info.json
-          V_BA=$(grep '${{ matrix.server.id }}_BA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
-          V_FL=$(grep '${{ matrix.server.id }}_FLATDATA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
+          SERVER_ID_LOWER=$(echo "${{ matrix.server.id }}" | tr '[:upper:]' '[:lower:]')
+          bash other/version.sh ${{ matrix.server.id }} info_${SERVER_ID_LOWER}.json          
+
+          V_BA=$(grep 'BA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
+          V_FL=$(grep 'FLATDATA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
           echo "ver=$V_BA" >> $GITHUB_OUTPUT
           echo "fl_ver=$V_FL" >> $GITHUB_OUTPUT
 
