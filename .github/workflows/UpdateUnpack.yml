@@ -160,7 +160,6 @@ jobs:
               SERVER_ID_LOWER=$(echo "$s" | tr '[:upper:]' '[:lower:]')
               bash tool/other/version.sh "$s" info_${SERVER_ID_LOWER}.json >> "$GITHUB_OUTPUT"
               V_BA=$(grep "BA_VERSION_NAME" "$GITHUB_OUTPUT" | cut -d'=' -f2)
-              V_FL=$(grep "FLATDATA_VERSION_NAME" "$GITHUB_OUTPUT" | cut -d'=' -f2)
               case $s in
                 JP) NAME="日服" ;;
                 GL) NAME="国际服" ;;
@@ -168,7 +167,7 @@ jobs:
               esac
               
               cd "all-artifacts/table-$s/bundle_raw"
-              FILE_NAME="${NAME}${V_FL}.zip"
+              FILE_NAME="${NAME}${V_BA}.zip"
               zip -r "../../../final-packages/$FILE_NAME" DBSchema ExcelTable
               cd ../../../
 
