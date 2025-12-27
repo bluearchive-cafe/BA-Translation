@@ -15,6 +15,8 @@ jobs:
       cn_changes: ${{ steps.run_script.outputs.cn_table_changed }}
       gl_changes: ${{ steps.run_script.outputs.gl_catalog_changed }}
       jp_changes: ${{ steps.run_script.outputs.jp_catalog_changed }}
+      jp_server_info_name: ${{ steps.run_script.outputs.jp_server_info_name }}
+      jp_addressable_name: ${{ steps.run_script.outputs.jp_addressable_name }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -84,10 +86,14 @@ jobs:
             gh run rerun "$REPACK_ID"
           fi
 
-      - name: Print Outputs
+      - name: Run APK
         run: |
-          echo "JP Server Info Name: ${{ steps.run_script.outputs.jp_server_info_name }}"
-          echo "JP Addressable Name: ${{ steps.run_script.outputs.jp_addressable_name }}"
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: token ${{ secrets.APK_SRC_REPO }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/beichen23333/BAJpApkSrc/dispatches \
+            -d '{"event_type": "APK","client_payload": {"ServerInfo": "${{ steps.run_script.outputs.jp_server_info_name }}"}}'
 
       - name: Generate Matrix Output
         id: set-matrix
@@ -174,3 +180,27 @@ jobs:
           git add .
           git commit -m "Upload Data: ${{ matrix.name }} ${{ matrix.version }}" --allow-empty
           git push origin ${{ matrix.id }}
+
+  Final:
+    name: 部署
+    needs: [check, FlatData]
+    if: needs.check.outputs.cn_changes == 'true' || needs.check.outputs.jp_changes == 'true' || needs.check.outputs.gl_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Unpack
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: token ${{ secrets.APK_SRC_REPO }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/dispatches \
+            -d '{"event_type": "Unpack","client_payload": {"JP_Enabled": "${{ needs.check.outputs.jp_changes }}", "GL_Enabled": "${{ needs.check.outputs.gl_changes }}", "CN_Enabled": "${{ needs.check.outputs.cn_changes }}"}}'
+
+      - name: Run Repack
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: token ${{ secrets.APK_SRC_REPO }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/dispatches \
+            -d '{"event_type": "Repack","client_payload": {"Addressable": "${{ needs.check.outputs.jp_addressable_name }}"}}'

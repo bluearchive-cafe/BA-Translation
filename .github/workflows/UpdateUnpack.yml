@@ -111,6 +111,13 @@ jobs:
           mkdir -p workspace/bundle_raw
           cp -r unpacked/* workspace/bundle_raw/
 
+      - name: Cache Unpack
+        id: cache-unpack
+        uses: actions/cache@v4
+        with:
+          path: workspace/
+          key: ${{ matrix.server.id }}-unpack-${{ steps.v.outputs.BA_VERSION_NAME }}
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:

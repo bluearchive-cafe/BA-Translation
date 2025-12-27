@@ -55,22 +55,14 @@ jobs:
       - name: Get Version info
         id: v
         run: |
-          bash other/version.sh JP info.json
-          V_BA=$(grep 'JP_BA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
-          V_FL=$(grep 'JP_FLATDATA_VERSION_NAME' $GITHUB_OUTPUT | cut -d'=' -f2)
-          echo "ver=$V_BA" >> $GITHUB_OUTPUT
-          echo "fl_ver=$V_FL" >> $GITHUB_OUTPUT
+          bash other/version.sh JP info_jp.json >> "$GITHUB_OUTPUT"
 
-      - name: Clone and Unpack FlatData
-        run: |
-          git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git flat_repo
-          mkdir -p Extracted
-          ZIP_NAME="日服${{ steps.v.outputs.fl_ver }}.zip"
-          if [ -f "flat_repo/$ZIP_NAME" ]; then
-            unzip -o "flat_repo/$ZIP_NAME" -d ./Extracted
-          else
-            exit 1
-          fi
+      - name: Cache FlatData
+        id: cache-flatdata
+        uses: actions/cache@v4
+        with:
+          path: Extracted/FlatData
+          key: JP-flatdata-${{ steps.v.outputs.FLATDATA_VERSION_NAME }}
 
       - name: Update table
         run: |
@@ -81,7 +73,7 @@ jobs:
 
       - name: Extract Existing Assets
         run: |
-          ZIP_NAME="BA-Assets-TableBundles/JP+${{ steps.v.outputs.ver }}.zip"
+          ZIP_NAME="BA-Assets-TableBundles/日服${{ steps.v.outputs.BA_VERSION_NAME }}.zip"
           if [ -f "$ZIP_NAME" ]; then
             mkdir -p unpacked
             unzip -o "$ZIP_NAME" -d unpacked
