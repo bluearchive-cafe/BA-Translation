@@ -118,7 +118,7 @@ jobs:
         run: |
           mkdir -p Extracted/Dumps
           if [ -f "repo_data/dump.cs" ]; then
-            cp repo_data/dump.cs Extracted/Dumps/dump.cs
+            cp repo_data/dump.cs Dumps/dump.cs
             echo "Successfully copied dump.cs for CN server."
           else
             echo "Warning: dump.cs not found in repo_data."

@@ -126,7 +126,7 @@ jobs:
         run: |
           chmod +x update/update_table.sh
           update/update_table.sh ${{ matrix.server.id }}
-          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./other/config.json ./unpacked ${{ matrix.server.id }}
+          python unpack_excel.py ./downloads/TableBundles/ExcelDB.db ./downloads/TableBundles/Excel.zip ./Extracted/FlatData ./unpacked ${{ matrix.server.id }}
 
       - name: Organize Artifacts
         if: steps.check.outputs.run == 'true' && success()
