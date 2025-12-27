@@ -12,6 +12,9 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_changes: ${{ steps.set-matrix.outputs.has_changes }}
+      cn_changes: ${{ steps.run_script.outputs.cn_table_changed }}
+      gl_changes: ${{ steps.run_script.outputs.gl_catalog_changed }}
+      jp_changes: ${{ steps.run_script.outputs.jp_catalog_changed }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -49,6 +52,38 @@ jobs:
             git push
           fi
 
+      - name: Check and Rerun Failed Workflows
+        if: steps.run_script.outputs.jp_catalog_changed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CATALOG_URL=$(jq -r '.AddressableCatalogUrl' info_jp.json)
+          TARGET_URL="${CATALOG_URL}/TableBundles/TableCatalog.bytes"
+          
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$TARGET_URL")
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Target URL status: $HTTP_STATUS. Skipping."
+            exit 0
+          fi
+
+          UNPACK_RUN=$(gh run list --workflow UpdateUnpack.yml --limit 1 --json databaseId,conclusion --jq '.[0]')
+          UNPACK_ID=$(echo "$UNPACK_RUN" | jq -r '.databaseId')
+          UNPACK_STATUS=$(echo "$UNPACK_RUN" | jq -r '.conclusion')
+
+          if [ "$UNPACK_STATUS" == "failure" ] && [ -n "$UNPACK_ID" ]; then
+            echo "Last UpdateUnpack failed. Rerunning: $UNPACK_ID"
+            gh run rerun "$UNPACK_ID"
+          fi
+
+          REPACK_RUN=$(gh run list --workflow UpdateRepack.yml --limit 1 --json databaseId,conclusion --jq '.[0]')
+          REPACK_ID=$(echo "$REPACK_RUN" | jq -r '.databaseId')
+          REPACK_STATUS=$(echo "$REPACK_RUN" | jq -r '.conclusion')
+
+          if [ "$REPACK_STATUS" == "failure" ] && [ -n "$REPACK_ID" ]; then
+            echo "Last UpdateRepack failed. Rerunning: $REPACK_ID"
+            gh run rerun "$REPACK_ID"
+          fi
+
       - name: Print Outputs
         run: |
           echo "JP Server Info Name: ${{ steps.run_script.outputs.jp_server_info_name }}"
@@ -59,25 +94,19 @@ jobs:
         run: |
           MATRIX_JSON='{"include":[]}'
           HAS_CHANGES="false"
-          DEPLOY_JP="${{ steps.run_script.outputs.jp_catalog_changed }}"
-          DEPLOY_CN="${{ steps.run_script.outputs.cn_table_changed }}"
-          DEPLOY_GL="${{ steps.run_script.outputs.gl_catalog_changed }}"
 
           if [ "${{ steps.run_script.outputs.jp_version_changed }}" == "true" ]; then
-            MATRIX_JSON=$(echo $MATRIX_JSON | jq -c --arg deploy "$DEPLOY_JP" '.include += [{"id": "JP", "name": "日服", "version": "${{ steps.run_script.outputs.jp_version }}", "deploy": $deploy}]')
+            MATRIX_JSON=$(echo $MATRIX_JSON | jq -c '.include += [{"id": "JP", "name": "日服", "version": "${{ steps.run_script.outputs.jp_version }}"}]')
             HAS_CHANGES="true"
           fi
-
           if [ "${{ steps.run_script.outputs.gl_version_changed }}" == "true" ]; then
-            MATRIX_JSON=$(echo $MATRIX_JSON | jq -c --arg deploy "$DEPLOY_GL" '.include += [{"id": "GL", "name": "国际服", "version": "${{ steps.run_script.outputs.gl_version }}", "deploy": $deploy}]')
+            MATRIX_JSON=$(echo $MATRIX_JSON | jq -c '.include += [{"id": "GL", "name": "国际服", "version": "${{ steps.run_script.outputs.gl_version }}"}]')
             HAS_CHANGES="true"
           fi
-
           if [ "${{ steps.run_script.outputs.cn_version_changed }}" == "true" ]; then
-            MATRIX_JSON=$(echo $MATRIX_JSON | jq -c --arg deploy "$DEPLOY_CN" '.include += [{"id": "CN", "name": "国服", "version": "${{ steps.run_script.outputs.cn_version }}", "deploy": $deploy}]')
+            MATRIX_JSON=$(echo $MATRIX_JSON | jq -c '.include += [{"id": "CN", "name": "国服", "version": "${{ steps.run_script.outputs.cn_version }}"}]')
             HAS_CHANGES="true"
           fi
-
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
           echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
 
