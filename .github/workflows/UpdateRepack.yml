@@ -57,12 +57,12 @@ jobs:
         run: |
           bash other/version.sh JP info_jp.json >> "$GITHUB_OUTPUT"
 
-      - name: Cache FlatData
-        id: cache-flatdata
+      - name: Cache Unpack
+        id: cache-unpack
         uses: actions/cache@v4
         with:
-          path: Extracted/FlatData
-          key: JP-flatdata-${{ steps.v.outputs.FLATDATA_VERSION_NAME }}
+          path: workspace/
+          key: JP-unpack-${{ steps.v.outputs.BA_VERSION_NAME }}
 
       - name: Update table
         run: |
@@ -71,17 +71,9 @@ jobs:
           chmod +x ./other/MemoryPackRepacker
           ./other/MemoryPackRepacker deserialize table TableCatalog.bytes TableCatalog.json
 
-      - name: Extract Existing Assets
-        run: |
-          ZIP_NAME="BA-Assets-TableBundles/日服${{ steps.v.outputs.BA_VERSION_NAME }}.zip"
-          if [ -f "$ZIP_NAME" ]; then
-            mkdir -p unpacked
-            unzip -o "$ZIP_NAME" -d unpacked
-          fi
-
       - name: Update Excel
         env:
-          CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir || 'default' }}
+          CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir}}
         run: |
-          python repack_excel.py ./beichen/latest/TableBundles/buildSrc ./Extracted/FlatData ./downloads/TableBundles ./unpacked ./
+          python repack_excel.py ./beichen/latest/TableBundles/buildSrc ./Extracted/FlatData ./TableBundles ./workspace ./
           python patch_table_catalog.py "$CUSTOM_DIR"

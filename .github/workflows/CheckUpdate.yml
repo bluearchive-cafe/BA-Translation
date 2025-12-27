@@ -93,7 +93,7 @@ jobs:
             -H "Authorization: token ${{ secrets.APK_SRC_REPO }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/beichen23333/BAJpApkSrc/dispatches \
-            -d '{"event_type": "APK","client_payload": {"ServerInfo": "${{ steps.run_script.outputs.jp_server_info_name }}"}}'
+            -d '{"event_type": "APK","client_payload": {"serverInfo": "${{ steps.run_script.outputs.jp_server_info_name }}"}}'
 
       - name: Generate Matrix Output
         id: set-matrix
@@ -203,4 +203,4 @@ jobs:
             -H "Authorization: token ${{ secrets.APK_SRC_REPO }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "Repack","client_payload": {"Addressable": "${{ needs.check.outputs.jp_addressable_name }}"}}'
+            -d '{"event_type": "Repack","client_payload": {"custom_dir": "${{ needs.check.outputs.jp_addressable_name }}"}}'
