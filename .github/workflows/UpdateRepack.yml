@@ -57,6 +57,13 @@ jobs:
         run: |
           bash other/version.sh JP info_jp.json >> "$GITHUB_OUTPUT"
 
+      - name: Cache FlatData
+        id: cache-flatdata
+        uses: actions/cache@v4
+        with:
+          path: Extracted/FlatData
+          key: JP-flatdata-${{ steps.v.outputs.FLATDATA_VERSION_NAME }}
+
       - name: Cache Unpack
         id: cache-unpack
         uses: actions/cache@v4
@@ -69,7 +76,7 @@ jobs:
           chmod +x update/update_table.sh
           update/update_table.sh JP
           chmod +x ./other/MemoryPackRepacker
-          ./other/MemoryPackRepacker deserialize table TableCatalog.bytes TableCatalog.json
+          ./other/MemoryPackRepacker deserialize table TableBundles/TableCatalog.bytes TableCatalog.json
 
       - name: Update Excel
         env:
