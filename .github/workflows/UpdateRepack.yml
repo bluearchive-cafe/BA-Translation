@@ -86,6 +86,10 @@ jobs:
       - name: Patch Table Catalog
         env:
           PYTHONUNBUFFERED: "1"
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir}}
         run: |
           python patch_table_catalog.py "$CUSTOM_DIR"
