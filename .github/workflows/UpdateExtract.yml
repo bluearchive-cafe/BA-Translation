@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   setup:
+    name: 配置
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -59,7 +60,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.setup.outputs.matrix) }}
-    name: Extract (${{ matrix.id }})
+    name: 提取${{ matrix.name }}
     steps:
       - name: Checkout Tool Repository
         uses: actions/checkout@v4
@@ -116,7 +117,7 @@ jobs:
         run: |
           NEW_ZIP="Assets-Repo/${{ matrix.name }}${{ steps.v.outputs.BA_VERSION_NAME }}.zip"
           OLD_ZIP="Assets-Repo/${{ matrix.name }}${{ steps.prev_v.outputs.BA_VERSION_NAME }}.zip"
-          python -m tools.extract "$NEW_ZIP" "$OLD_ZIP" "./BA-Text" other/config.json 10
+          python -m tools.extract "$NEW_ZIP" "$OLD_ZIP" "./BA-Text" other/config.json 10 ${{ matrix.id }}
 
       - name: Commit and Push to BA-Text
         run: |
