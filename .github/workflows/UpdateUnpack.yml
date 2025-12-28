@@ -96,7 +96,7 @@ jobs:
         id: cache-flatdata
         uses: actions/cache@v4
         with:
-          path: Extracted/FlatData
+          path: Extracted
           key: ${{ matrix.server.id }}-flatdata-${{ steps.v.outputs.FLATDATA_VERSION_NAME }}
 
       - name: Clone Text Repository

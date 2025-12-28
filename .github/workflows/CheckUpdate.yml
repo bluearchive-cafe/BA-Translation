@@ -138,7 +138,7 @@ jobs:
         id: cache-flatdata
         uses: actions/cache@v4
         with:
-          path: Extracted/FlatData
+          path: Extracted
           key: ${{ matrix.id }}-flatdata-${{ matrix.version }}
 
       - name: Prepare Tool Environment
