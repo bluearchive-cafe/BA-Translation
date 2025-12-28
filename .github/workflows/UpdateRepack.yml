@@ -1,4 +1,4 @@
-name: Update-Repack Excel
+name: Repack Excel
 on:
   workflow_dispatch:
     inputs:

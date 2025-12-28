@@ -1,4 +1,4 @@
-name: Update-Unpack Excel
+name: Unpack Excel
 
 on:
   workflow_dispatch:
@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      jp_enabled: ${{ steps.detect.outputs.jp }}
+      gl_enabled: ${{ steps.detect.outputs.gl }}
+      cn_enabled: ${{ steps.detect.outputs.cn }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -188,4 +191,4 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           event-type: Extract
-          client-payload: '{"JP_enabled": "${{ github.event.client_payload.JP_enabled }}", "GL_enabled": "${{ github.event.client_payload.GL_enabled }}", "CN_enabled": "${{ github.event.client_payload.CN_enabled }}"}'
+          client-payload: '{"JP_enabled": "${{ needs.setup.outputs.jp_enabled }}", "GL_enabled": "${{ needs.setup.outputs.gl_enabled }}", "CN_enabled": "${{ needs.setup.outputs.cn_enabled }}"}'
