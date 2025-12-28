@@ -80,7 +80,12 @@ jobs:
       - name: Update Excel
         env:
           PYTHONUNBUFFERED: "1"
-          CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir}}
         run: |
           python repack_excel.py ./beichen/latest/TableBundles/buildSrc ./Extracted/FlatData ./TableBundles ./workspace ./
+
+      - name: Patch Table Catalog
+        env:
+          PYTHONUNBUFFERED: "1"
+          CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir}}
+        run: |
           python patch_table_catalog.py "$CUSTOM_DIR"
