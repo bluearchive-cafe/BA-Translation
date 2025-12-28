@@ -21,6 +21,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -28,7 +35,7 @@ jobs:
 
       - name: Prepare Tool Environment
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
+          git clone --depth 1 git@github.com:bluearchive-cafe/BlueArchive-Translation.git tool
           cp -r tool/* . && rm -rf tool
 
       - name: Install Dependencies
@@ -122,11 +129,17 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.check.outputs.matrix) }}
-      fail-fast: false
-    
+      fail-fast: false    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -142,13 +155,13 @@ jobs:
 
       - name: Prepare Tool Environment
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
+          git clone --depth 1 git@github.com:bluearchive-cafe/BlueArchive-Translation.git tool
           cp -r tool/* . && rm -rf tool
           pip install -r requirements.txt
 
       - name: Clone FlatData Branch
         run: |
-          git clone --depth 1 --branch ${{ matrix.id }} https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-FlatData.git repo_data
+          git clone --depth 1 --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-FlatData.git repo_data
 
       - name: Copy CN Dump File
         if: matrix.id == 'CN'

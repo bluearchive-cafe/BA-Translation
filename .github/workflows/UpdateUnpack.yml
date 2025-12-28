@@ -68,9 +68,16 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
       - name: Prepare Tool Environment
         run: |
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
+          git clone --depth 1 git@github.com:bluearchive-cafe/BlueArchive-Translation.git tool
           cp -r tool/* . && rm -rf tool
 
       - name: Configure SSH Access
@@ -101,7 +108,7 @@ jobs:
 
       - name: Clone Text Repository
         run: |
-          git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:roundRekt/BA-Assets-TableBundles.git BA-Text
+          git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git BA-Text
 
       - name: Execute Unpack Scripts
         run: |
@@ -148,7 +155,7 @@ jobs:
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
       - name: Prepare Translation Tool
-        run: git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BlueArchive-Translation.git tool
+        run: git clone --depth 1 git@github.com:bluearchive-cafe/BlueArchive-Translation.git tool
 
       - name: Download Processed Artifacts
         uses: actions/download-artifact@v4
@@ -176,7 +183,7 @@ jobs:
               zip -r "../../../final-packages/$FILE_NAME" DBSchema ExcelTable
               cd ../../../
 
-              git clone --depth 1 --branch $s git@github.com:roundRekt/BA-Assets-TableBundles.git "repo-$s"
+              git clone --depth 1 --branch $s git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git "repo-$s"
               cp "final-packages/$FILE_NAME" "repo-$s/"
               cd "repo-$s"
               git add .
