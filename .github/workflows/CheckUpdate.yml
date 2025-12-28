@@ -2,6 +2,12 @@ name: Check Update
 
 on:
   workflow_dispatch:
+    inputs:
+      trigger_redeploy:
+        description: '是否触发重新部署'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   check:
@@ -62,7 +68,7 @@ jobs:
           fi
 
       - name: Check and Rerun Failed Workflows
-        if: steps.run_script.outputs.jp_catalog_changed == 'false'
+        if: github.event.inputs.trigger_redeploy == 'true' && steps.run_script.outputs.jp_catalog_changed == 'false'
         env:
           GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
         run: |
