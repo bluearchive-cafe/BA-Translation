@@ -73,7 +73,6 @@ jobs:
           UNPACK_STATUS=$(echo "$UNPACK_RUN" | jq -r '.conclusion')
 
           if [ "$UNPACK_STATUS" == "failure" ] && [ -n "$UNPACK_ID" ]; then
-            echo "Last UpdateUnpack failed. Rerunning: $UNPACK_ID"
             gh run rerun "$UNPACK_ID"
           fi
 
@@ -117,7 +116,7 @@ jobs:
           echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
 
   FlatData:
-    name: 处理${{ matrix.server.name }}
+    name: 处理${{ matrix.name }}
     needs: check
     if: needs.check.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
