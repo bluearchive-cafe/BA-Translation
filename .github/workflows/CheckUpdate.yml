@@ -197,6 +197,7 @@ jobs:
             -d '{"event_type": "Unpack","client_payload": {"JP_Enabled": "${{ needs.check.outputs.jp_changes }}", "GL_Enabled": "${{ needs.check.outputs.gl_changes }}", "CN_Enabled": "${{ needs.check.outputs.cn_changes }}"}}'
 
       - name: Run Repack
+        if: needs.check.outputs.jp_changes == 'true'
         run: |
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
