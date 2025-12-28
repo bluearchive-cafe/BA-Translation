@@ -58,7 +58,7 @@ jobs:
       - name: Check and Rerun Failed Workflows
         if: steps.run_script.outputs.jp_catalog_changed == 'false'
         env:
-          GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           CATALOG_URL=$(jq -r '.AddressableCatalogUrl' info_jp.json)
           TARGET_URL="${CATALOG_URL}/TableBundles/TableCatalog.bytes"
