@@ -59,7 +59,6 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.setup.outputs.matrix) }}
-    
     name: Extract (${{ matrix.id }})
     steps:
       - name: Checkout Tool Repository
@@ -115,8 +114,8 @@ jobs:
 
       - name: Run Extraction
         run: |
-          NEW_ZIP="Assets-Repo/${{ matrix.name }}${{ setps.v.outputs.BA_VERSION_NAME }}.zip"
-          OLD_ZIP="Assets-Repo/${{ matrix.name }}${{ setps.prev_v.outputs.BA_VERSION_NAME }}.zip"
+          NEW_ZIP="Assets-Repo/${{ matrix.name }}${{ steps.v.outputs.BA_VERSION_NAME }}.zip"
+          OLD_ZIP="Assets-Repo/${{ matrix.name }}${{ steps.prev_v.outputs.BA_VERSION_NAME }}.zip"
           python -m tools.extract "$NEW_ZIP" "$OLD_ZIP" "./BA-Text" other/config.json 10
 
       - name: Commit and Push to BA-Text
@@ -125,7 +124,7 @@ jobs:
           git config --global user.name "GitHub Actions"
           cd BA-Text
           git add .
-          git commit -m "Extract ${{ matrix.id }} text: ${{ setps.v.outputs.BA_VERSION_NAME }} (from ${{ setps.prev_v.outputs.BA_VERSION_NAME }})" || exit 0
+          git commit -m "Extract ${{ matrix.id }} text: ${{ steps.v.outputs.BA_VERSION_NAME }} (from ${{ steps.prev_v.outputs.BA_VERSION_NAME }})" || exit 0
           git push origin ${{ matrix.id }}
 
   Final:
@@ -133,7 +132,6 @@ jobs:
     needs: [setup, deploy]
     runs-on: ubuntu-latest
     steps:
-
       - name: Deploy Translation
         run: |
           curl -X POST \
