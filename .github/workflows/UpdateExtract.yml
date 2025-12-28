@@ -99,19 +99,19 @@ jobs:
       - name: Get Version info
         id: v
         run: |
-          SERVER_ID_LOWER=$(echo "${{ matrix.server.id }}" | tr '[:upper:]' '[:lower:]')
-          bash other/version.sh ${{ matrix.server.id }} info_${SERVER_ID_LOWER}.json >> "$GITHUB_OUTPUT"
+          SERVER_ID_LOWER=$(echo "${{ matrix.id }}" | tr '[:upper:]' '[:lower:]')
+          bash other/version.sh ${{ matrix.id }} info_${SERVER_ID_LOWER}.json >> "$GITHUB_OUTPUT"
 
       - name: Get Previous Version Info
         id: prev_v
         run: |
-          SERVER_ID_LOWER=$(echo "${{ matrix.server.id }}" | tr '[:upper:]' '[:lower:]')
+          SERVER_ID_LOWER=$(echo "${{ matrix.id }}" | tr '[:upper:]' '[:lower:]')
           ORIGINAL_FILE="info_${SERVER_ID_LOWER}.json"
           TEMP_FILE="prev_${ORIGINAL_FILE}"
 
           git show HEAD^:"$ORIGINAL_FILE" > "$TEMP_FILE"
 
-          bash other/version.sh ${{ matrix.server.id }} "$TEMP_FILE" >> "$GITHUB_OUTPUT"
+          bash other/version.sh ${{ matrix.id }} "$TEMP_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Run Extraction
         run: |
