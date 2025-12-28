@@ -9,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      contents: read
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       has_changes: ${{ steps.set-matrix.outputs.has_changes }}
@@ -58,7 +57,7 @@ jobs:
       - name: Check and Rerun Failed Workflows
         if: steps.run_script.outputs.jp_catalog_changed == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
         run: |
           CATALOG_URL=$(jq -r '.AddressableCatalogUrl' info_jp.json)
           TARGET_URL="${CATALOG_URL}/TableBundles/TableCatalog.bytes"
