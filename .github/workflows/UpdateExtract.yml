@@ -76,7 +76,7 @@ jobs:
 
       - name: Clone Required Repositories
         run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/BlueArchive-Translation.git BlueArchive-Translation
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git BlueArchive-Translation
           git clone --depth 1 --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-Text.git BA-Text
           git clone --depth 1 --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git Assets-Repo
 
