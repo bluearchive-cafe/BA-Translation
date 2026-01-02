@@ -108,16 +108,35 @@ jobs:
           SERVER_ID_LOWER=$(echo "${{ matrix.id }}" | tr '[:upper:]' '[:lower:]')
           bash other/version.sh ${{ matrix.id }} info_${SERVER_ID_LOWER}.json >> "$GITHUB_OUTPUT"
 
-      - name: Get Previous Version Info
+      - name: Find last meaningful change in info.json
         id: prev_v
         run: |
           SERVER_ID_LOWER=$(echo "${{ matrix.id }}" | tr '[:upper:]' '[:lower:]')
           ORIGINAL_FILE="info_${SERVER_ID_LOWER}.json"
-          TEMP_FILE="prev_${ORIGINAL_FILE}"
-
-          git show HEAD^:"$ORIGINAL_FILE" > "$TEMP_FILE"
-
-          bash other/version.sh ${{ matrix.id }} "$TEMP_FILE" >> "$GITHUB_OUTPUT"
+          CURRENT_CONTENT=$(cat "$ORIGINAL_FILE")
+          
+          for commit in $(git log --pretty=format:"%H" -- "$ORIGINAL_FILE"); do
+            PREV_CONTENT=$(git show $commit:"$ORIGINAL_FILE" 2>/dev/null || echo "")
+            
+            if [ "$PREV_CONTENT" != "$CURRENT_CONTENT" ] && [ -n "$PREV_CONTENT" ]; then
+              PREV_COMMIT=$commit
+              break
+            fi
+          done
+          
+          if [ -z "$PREV_COMMIT" ]; then
+            echo "No previous version with different content found"
+            exit 1
+          fi
+          
+          echo "Found meaningful previous commit: $PREV_COMMIT"
+          git show $PREV_COMMIT:"$ORIGINAL_FILE" > /tmp/prev_"$ORIGINAL_FILE".json
+          echo "Previous info.json content:"
+          cat /tmp/prev_"$ORIGINAL_FILE".json
+          
+          echo "Running version.sh on previous info.json:"
+          bash other/version.sh JP /tmp/prev_"$ORIGINAL_FILE".json >> "$GITHUB_OUTPUT"
+          echo "prev_commit=$PREV_COMMIT" >> "$GITHUB_OUTPUT"
 
       - name: Run Clean
         run: |
