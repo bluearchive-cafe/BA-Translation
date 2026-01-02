@@ -136,7 +136,7 @@ jobs:
         run: |
           NEW_ZIP="Assets-Repo/${{ matrix.name }}${{ steps.v.outputs.BA_VERSION_NAME }}.zip"
           OLD_ZIP="Assets-Repo/${{ matrix.name }}${{ steps.prev_v.outputs.BA_VERSION_NAME }}.zip"
-          python -m tools.extract "$NEW_ZIP" "$OLD_ZIP" "./BA-Text" other/config.json 10 ${{ matrix.id }}
+          python -m tools.extract "$NEW_ZIP" "$OLD_ZIP" "./BA-Text" ${{ matrix.id }}
 
       - name: Commit and Push to BA-Text
         run: |
