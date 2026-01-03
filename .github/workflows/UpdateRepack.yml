@@ -6,6 +6,7 @@ on:
         description: 'Target Directory'
         required: false
         default: ''
+      is_cn: { type: boolean, default: false }
   repository_dispatch:
     types: [Repack]
 permissions:
@@ -29,13 +30,10 @@ jobs:
 
       - name: Clone repository
         run: |
-          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           git clone --depth 1 git@github.com:bluearchive-cafe/Localized.git beichen
-
-      - name: Move contents to current directory
-        run: |
-          mv BlueArchive-Translation/* .
-          rm -rf BlueArchive-Translation
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-VoiceCN.git
+          cp -r tool/* . && rm -rf tool
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -76,14 +74,16 @@ jobs:
           update/update_table.sh JP
           chmod +x ./other/MemoryPackRepacker
           ./other/MemoryPackRepacker deserialize table TableBundles/TableCatalog.bytes TableCatalog.json
+          ./other/MemoryPackRepacker deserialize media MediaResources/MediaCatalog.bytes MediaCatalog.json
 
       - name: Update Excel
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          python repack_excel.py ./beichen/latest/TableBundles/buildSrc ./Extracted/FlatData ./TableBundles ./workspace ./
+          python voicecn.py ./BA-VoiceCN/Voice voice_config.json
+          python repack_excel.py ./Localized/latest/TableBundles/buildSrc ./Extracted/FlatData ./TableBundles ./workspace ./BA-VoiceCN/Voice
 
-      - name: Patch Table Catalog
+      - name: Patch Catalog
         env:
           PYTHONUNBUFFERED: "1"
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -91,5 +91,7 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir}}
+          IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn}}
         run: |
+          python patch_media_catalog.py "$CUSTOM_DIR" "$IS_CN"
           python patch_table_catalog.py "$CUSTOM_DIR"
