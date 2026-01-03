@@ -76,12 +76,17 @@ jobs:
           ./other/MemoryPackRepacker deserialize table TableBundles/TableCatalog.bytes TableCatalog.json
           ./other/MemoryPackRepacker deserialize media MediaResources/MediaCatalog.bytes MediaCatalog.json
 
-      - name: Update Excel
+      - name: Update Voice
         env:
           PYTHONUNBUFFERED: "1"
         run: |
           python voicecn.py ./BA-VoiceCN/Voice voice_config.json
-          python repack_excel.py ./Localized/latest/TableBundles/buildSrc ./Extracted/FlatData ./TableBundles ./workspace ./BA-VoiceCN/Voice
+
+      - name: Update Excel
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python repack_excel.py ./Localized/latest/TableBundles/buildSrc ./Extracted/FlatData ./TableBundles ./workspace . ./BA-VoiceCN/Voice
 
       - name: Patch Catalog
         env:
