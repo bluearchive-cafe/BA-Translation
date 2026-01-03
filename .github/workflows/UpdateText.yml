@@ -69,32 +69,38 @@ jobs:
       - name: Commit files Translation
         run: |
           cd BA-Text-Translation
-          if [ -d "NewBack" ]; then
-            rm -rf "NewBack"
-          fi      
-          if [ -d "ReviseBack" ]; then
-            rm -rf "ReviseBack"
-          fi
+          if [ -d "NewBack" ]; then rm -rf "NewBack"; fi      
+          if [ -d "ReviseBack" ]; then rm -rf "ReviseBack"; fi
+          
           git add .
-
-          git commit -m "文本写回 $(date +%F-%T)"
-          git push origin
-          cd
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "文本写回 $(date +%F-%T)"
+            git push origin
+          else
+            echo "No changes to commit in BA-Text-Translation"
+          fi
+          cd ..
 
       - name: Commit files beicheng
         run: |
           cd beicheng
           git add .
-
-          git commit -m "提交汉化文本 $(date +%F-%T)"
-          git push origin
-          cd
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "提交汉化文本 $(date +%F-%T)"
+            git push origin
+          else
+            echo "No changes to commit in beicheng"
+          fi
+          cd ..
 
       - name: Commit files Localized
         run: |
           cd Localized
           git add .
-
-          git commit -m "提交汉化文本 $(date +%F-%T)"
-          git push origin
-          cd
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "提交汉化文本 $(date +%F-%T)"
+            git push origin
+          else
+            echo "No changes to commit in Localized"
+          fi
+          cd ..
