@@ -95,7 +95,6 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev
           pip install pysqlcipher3 sqlcipher3 -r requirements.txt
 
