@@ -58,7 +58,7 @@ jobs:
         run: |
           git clone --depth 1 git@github.com:asfu222/beicheng.git beicheng
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
-          git clone --depth 1 git@github.com:bluearchive-cafe/beichen.git beichen
+          git clone --depth 1 git@github.com:bluearchive-cafe/Localized.git Localized
 
           python -m tools.clean "BA-Assets-TableBundles/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" JP
           python -m tools.update "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
@@ -90,9 +90,9 @@ jobs:
           git push origin
           cd
 
-      - name: Commit files beichen
+      - name: Commit files Localized
         run: |
-          cd beichen
+          cd Localized
           git add .
 
           git commit -m "提交汉化文本 $(date +%F-%T)"
