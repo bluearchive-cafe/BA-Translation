@@ -77,7 +77,6 @@ jobs:
           ./other/MemoryPackRepacker deserialize media MediaResources/MediaCatalog.bytes MediaCatalog.json
 
       - name: Update Voice
-        if: github.event.inputs.is_cn == 'true' || github.event.client_payload.is_cn == 'true'
         env:
           PYTHONUNBUFFERED: "1"
         run: |
