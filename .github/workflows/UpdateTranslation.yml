@@ -38,25 +38,27 @@ jobs:
         with:
           submodules: false
 
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
       - name: Setup python version
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install requirements
+      - name: Prepare Tool Environment
         run: |
-          python -m pip install --upgrade pip
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          cp -r tool/* . && rm -rf tool
           pip install requests
 
       - name: Clone repositories
         run: |
-          git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
-          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
-
-      - name: Move contents to current directory
-        run: |
-          mv BlueArchive-Translation/* .
-          rm -rf BlueArchive-Translation
+          git clone --depth 1 --branch JP git@github.com:bluearchive-cafe/BA-Text.git
 
       - name: Run translation
         env:
