@@ -9,7 +9,7 @@ on:
         description: '是否触发重新部署'
         required: true
         type: boolean
-        default: false
+        default: true
 
 jobs:
   check:
@@ -70,7 +70,7 @@ jobs:
           fi
 
       - name: Check and Rerun Failed Workflows
-        if: github.event.inputs.trigger_redeploy == 'true' && steps.run_script.outputs.jp_catalog_changed == 'false'
+        if: github.event.inputs.trigger_redeploy != 'false' && steps.run_script.outputs.jp_catalog_changed == 'false'
         env:
           GH_TOKEN: ${{ secrets.APK_SRC_REPO }}
         run: |
@@ -210,7 +210,11 @@ jobs:
   Final:
     name: 部署
     needs: [check, FlatData]
-    if: needs.check.outputs.cn_changes == 'true' || needs.check.outputs.jp_changes == 'true' || needs.check.outputs.gl_changes == 'true'
+    if: |
+      always() && 
+      needs.check.result == 'success' &&
+      (needs.FlatData.result == 'success' || needs.FlatData.result == 'skipped') &&
+      (needs.check.outputs.cn_changes == 'true' || needs.check.outputs.jp_changes == 'true' || needs.check.outputs.gl_changes == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Run Unpack
