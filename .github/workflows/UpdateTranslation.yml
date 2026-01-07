@@ -1,0 +1,80 @@
+name: Update-Translation text
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_path:
+        description: 'File path'
+        required: true
+        default: 'BA-Text/New|BA-Text/Revise'
+        type: string
+      output_path:
+        description: 'Output path'
+        required: true
+        default: 'BA-Text/Translation|BA-Text/Translation_Revise'
+        type: string
+      batch_size:
+        description: 'Translation batch size'
+        required: true
+        default: '20'
+        type: string
+      max_workers:
+        description: 'Max workers(thread)'
+        required: true
+        default: '10'
+        type: string
+  repository_dispatch:
+    types: [Translation]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Clone repositories
+        run: |
+          git clone --depth 1 --branch JP https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com/beichen23333/BA-Text.git
+          git clone --depth 1 https://x-access-token:${{ secrets.APK_SRC_REPO }}@github.com:/beichen23333/BlueArchive-Translation.git
+
+      - name: Move contents to current directory
+        run: |
+          mv BlueArchive-Translation/* .
+          rm -rf BlueArchive-Translation
+
+      - name: Run translation
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          FILE_PATH="${{ github.event.client_payload.file_path || inputs.file_path }}"
+          OUTPUT_PATH="${{ github.event.client_payload.output_path || inputs.output_path }}"
+          BATCH_SIZE="${{ github.event.client_payload.batch_size || inputs.batch_size }}"
+          MAX_WORKERS="${{ github.event.client_payload.max_workers || inputs.max_workers }}"
+          
+          python translation.translation.py "$FILE_PATH" "$OUTPUT_PATH" "$BATCH_SIZE" "$MAX_WORKERS"
+
+      - name: Commit translation files
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          cd BA-Text
+          git add .
+
+          git commit -m "提交汉化文本"
+          git push origin JP
