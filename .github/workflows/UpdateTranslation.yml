@@ -1,4 +1,4 @@
-name: Update-Translation text
+name: Translation
 
 on:
   workflow_dispatch:
