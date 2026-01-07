@@ -69,7 +69,7 @@ jobs:
           BATCH_SIZE="${{ github.event.client_payload.batch_size || inputs.batch_size }}"
           MAX_WORKERS="${{ github.event.client_payload.max_workers || inputs.max_workers }}"
           
-          python -m translation.translation "$FILE_PATH" "$OUTPUT_PATH" --batch_size "$BATCH_SIZE" --max_workers "$MAX_WORKERS"
+          python -m translation.translation "$FILE_PATH" "$OUTPUT_PATH" "$BATCH_SIZE" "$MAX_WORKERS"
 
       - name: Commit translation files
         run: |
