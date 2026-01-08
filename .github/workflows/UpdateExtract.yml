@@ -161,6 +161,7 @@ jobs:
   Final:
     name: 部署
     needs: [setup, deploy]
+    if: needs.setup.outputs.jp == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy Translation

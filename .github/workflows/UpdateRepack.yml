@@ -78,8 +78,8 @@ jobs:
         run: |
           chmod +x update/update_table.sh
           update/update_table.sh JP
-          dotnet run --project BA-CatalogMemoryPack/src/Program.cs -- deserialize table TableBundles/TableCatalog.bytes TableCatalog.json
-          dotnet run --project BA-CatalogMemoryPack/src/Program.cs -- deserialize media MediaResources/MediaCatalog.bytes MediaCatalog.json
+          dotnet run BA-CatalogMemoryPack/src/Program.cs -- deserialize table TableBundles/TableCatalog.bytes TableCatalog.json
+          dotnet run BA-CatalogMemoryPack/src/Program.cs -- deserialize media MediaResources/MediaCatalog.bytes MediaCatalog.json
 
       - name: Update Voice
         if: github.event.inputs.is_cn == 'true' || github.event.client_payload.is_cn == 'true'
