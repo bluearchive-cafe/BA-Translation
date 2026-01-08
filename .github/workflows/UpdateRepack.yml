@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
     inputs:
       custom_dir:
-        description: 'Target Directory'
+        description: '小版本号'
         required: false
         default: ''
-      is_cn: { description: '中配', type: boolean, default: false }
+      is_cn: { description: '中配zip上传', type: boolean, default: false }
   repository_dispatch:
     types: [Repack]
 permissions:
@@ -32,8 +32,14 @@ jobs:
         run: |
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           git clone --depth 1 git@github.com:bluearchive-cafe/Localized.git beichen
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-CatalogMemoryPack.git BA-CatalogMemoryPack
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-VoiceCN.git
           cp -r tool/* . && rm -rf tool
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -72,9 +78,8 @@ jobs:
         run: |
           chmod +x update/update_table.sh
           update/update_table.sh JP
-          chmod +x ./other/MemoryPackRepacker
-          ./other/MemoryPackRepacker deserialize table TableBundles/TableCatalog.bytes TableCatalog.json
-          ./other/MemoryPackRepacker deserialize media MediaResources/MediaCatalog.bytes MediaCatalog.json
+          dotnet run --project BA-CatalogMemoryPack/src/Program.cs -- deserialize table TableBundles/TableCatalog.bytes TableCatalog.json
+          dotnet run --project BA-CatalogMemoryPack/src/Program.cs -- deserialize media MediaResources/MediaCatalog.bytes MediaCatalog.json
 
       - name: Update Voice
         if: github.event.inputs.is_cn == 'true' || github.event.client_payload.is_cn == 'true'
