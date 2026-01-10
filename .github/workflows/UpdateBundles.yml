@@ -1,0 +1,117 @@
+name: Update Bundles
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: "[0,1,2,3,4,5,6,7,8,9,10,11]"
+    steps:
+      - run: echo "Preparing..."
+
+  download_and_process:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [Android, iOS]
+        segment: [0,1,2,3,4,5,6,7,8,9,10,11]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
+      - name: Clone repository
+        run: |
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          cp -r tool/* . && rm -rf tool
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install requirements
+        run: pip install UnityPy pillow requests
+
+      - run: |
+          chmod +x ./other/MemoryPackRepacker
+          python update_bundles.py --platform ${{ matrix.platform }} --segment ${{ matrix.segment }} --total 12
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-${{ matrix.platform }}-${{ matrix.segment }}
+          path: |
+            output_assets/
+            configs/
+
+  merge_and_push:
+    needs: download_and_process
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: merged_artifacts
+
+      - run: |
+          git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
+          git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
+
+          cp -r merged_artifacts/assets-Android-*/output_assets/spinecharacters/* spinecharacters/ 2>/dev/null || true
+          cp -r merged_artifacts/assets-Android-*/output_assets/spinelobbies/* spinelobbies/ 2>/dev/null || true
+          cp -r merged_artifacts/assets-iOS-*/output_assets/spinecharacters/* spinecharacters/ 2>/dev/null || true
+          cp -r merged_artifacts/assets-iOS-*/output_assets/spinelobbies/* spinelobbies/ 2>/dev/null || true
+          
+          python -c "
+          import json, glob, os
+          for p in ['android', 'ios']:
+              full = {}
+              files = glob.glob(f'merged_artifacts/assets-*/configs/bundle_config_{p}.json')
+              for f in files:
+                  with open(f) as j:
+                      d = json.load(j)
+                      if d: full.update(d)
+              with open(f'bundle_config_{p}.json', 'w') as out:
+                  json.dump(full, out, indent=4)
+          "
+          rm -rf merged_artifacts
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add bundle_config_*.json
+          git commit -m "Update Assets Config" || exit 0
+          git push
+
+          cd spinecharacters
+          git add .
+          git commit -m "Update Assets" || exit 0
+          git push
+
+          cd spinelobbies
+          git add .
+          git commit -m "Update Assets" || exit 0
+          git push
