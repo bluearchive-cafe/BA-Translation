@@ -100,8 +100,8 @@ jobs:
           "
           rm -rf merged_artifacts
           
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
           git add bundle_config_*.json
           git commit -m "Update Assets Config" || exit 0
           git push
