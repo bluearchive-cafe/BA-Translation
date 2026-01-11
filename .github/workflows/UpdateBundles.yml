@@ -105,7 +105,7 @@ jobs:
           cd repo_chars
           git add .
           git commit -m "Update Spine Characters" || echo "No character changes"
-          git push origin main
+          git push origin 角色立绘
           cd ..
 
           git clone git@github.com:bluearchive-cafe/spinelobbies.git repo_lobbies
@@ -113,7 +113,7 @@ jobs:
           cd repo_lobbies
           git add .
           git commit -m "Update Spine Lobbies" || echo "No lobby changes"
-          git push origin main
+          git push origin 记忆大厅
           cd ..
 
           rm -rf merged_artifacts repo_chars repo_lobbies
