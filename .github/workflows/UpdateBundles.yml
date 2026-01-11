@@ -44,7 +44,8 @@ jobs:
           python-version: '3.12'
 
       - name: Install requirements
-        run: pip install UnityPy pillow requests
+        run: |
+          pip install -r requirements.txt
 
       - run: |
           chmod +x ./other/MemoryPackRepacker
