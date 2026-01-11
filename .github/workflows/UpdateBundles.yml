@@ -1,4 +1,4 @@
-name: Update Bundles
+Name: Update Bundles
 on:
   workflow_dispatch:
 permissions:
