@@ -77,15 +77,11 @@ jobs:
         with:
           path: merged_artifacts
 
-      - run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git spinecharacters
-          git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git spinelobbies
+      - name: Sync and Push Assets
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
 
-          cp -r merged_artifacts/assets-Android-*/output_assets/spinecharacters/* spinecharacters/ 2>/dev/null || true
-          cp -r merged_artifacts/assets-Android-*/output_assets/spinelobbies/* spinelobbies/ 2>/dev/null || true
-          cp -r merged_artifacts/assets-iOS-*/output_assets/spinecharacters/* spinecharacters/ 2>/dev/null || true
-          cp -r merged_artifacts/assets-iOS-*/output_assets/spinelobbies/* spinelobbies/ 2>/dev/null || true
-          
           python -c "
           import json, glob, os
           for p in ['android', 'ios']:
@@ -95,25 +91,28 @@ jobs:
                   with open(f) as j:
                       d = json.load(j)
                       if d: full.update(d)
-              with open(f'bundle_config_{p}.json', 'w') as out:
-                  json.dump(full, out, indent=4)
+              if full:
+                  with open(f'bundle_config_{p}.json', 'w') as out:
+                      json.dump(full, out, indent=4)
           "
-          rm -rf merged_artifacts
-          
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
           git add bundle_config_*.json
-          git commit -m "Update Assets Config" || exit 0
-          git push
+          git commit -m "Update Assets Config" || echo "No config changes"
+          git push origin main
 
-          cd spinecharacters
+          git clone git@github.com:bluearchive-cafe/spinecharacters.git repo_chars
+          cp -r merged_artifacts/assets-*/output_assets/spinecharacters/* repo_chars/ 2>/dev/null || true
+          cd repo_chars
           git add .
-          git commit -m "Update Assets" || exit 0
-          git push
-          cd
+          git commit -m "Update Spine Characters" || echo "No character changes"
+          git push origin main
+          cd ..
 
-          cd spinelobbies
+          git clone git@github.com:bluearchive-cafe/spinelobbies.git repo_lobbies
+          cp -r merged_artifacts/assets-*/output_assets/spinelobbies/* repo_lobbies/ 2>/dev/null || true
+          cd repo_lobbies
           git add .
-          git commit -m "Update Assets" || exit 0
-          git push
-          cd
+          git commit -m "Update Spine Lobbies" || echo "No lobby changes"
+          git push origin main
+          cd ..
+
+          rm -rf merged_artifacts repo_chars repo_lobbies
