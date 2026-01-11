@@ -110,8 +110,10 @@ jobs:
           git add .
           git commit -m "Update Assets" || exit 0
           git push
+          cd
 
           cd spinelobbies
           git add .
           git commit -m "Update Assets" || exit 0
           git push
+          cd
