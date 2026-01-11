@@ -78,8 +78,8 @@ jobs:
           path: merged_artifacts
 
       - run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
-          git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
+          git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git spinecharacters
+          git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git spinelobbies
 
           cp -r merged_artifacts/assets-Android-*/output_assets/spinecharacters/* spinecharacters/ 2>/dev/null || true
           cp -r merged_artifacts/assets-Android-*/output_assets/spinelobbies/* spinelobbies/ 2>/dev/null || true
