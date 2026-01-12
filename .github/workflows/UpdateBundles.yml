@@ -1,6 +1,8 @@
 name: Update Bundles
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [Bundles]
 permissions:
   contents: write
 
