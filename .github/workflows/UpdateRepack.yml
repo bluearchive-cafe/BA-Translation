@@ -31,7 +31,7 @@ jobs:
       - name: Clone repository
         run: |
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
-          git clone --depth 1 git@github.com:bluearchive-cafe/Localized.git beichen
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-VoiceCN.git
           cp -r tool/* . && rm -rf tool
 
@@ -87,7 +87,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          python repack_excel.py beichen/latest/TableBundles/buildSrc Extracted/FlatData TableBundles workspace . voice_config.json
+          python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json
 
       - name: Patch Catalog
         env:

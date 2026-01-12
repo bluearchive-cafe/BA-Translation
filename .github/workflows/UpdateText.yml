@@ -58,13 +58,11 @@ jobs:
         run: |
           git clone --depth 1 git@github.com:asfu222/beicheng.git beicheng
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
-          git clone --depth 1 git@github.com:bluearchive-cafe/Localized.git Localized
 
           python -m tools.clean "BA-Assets-TableBundles/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" JP
           python -m tools.update "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
           python -m tools.back "BA-Text-Translation"
           python -m tools.re_extract "BA-Text-Translation" "BA-Text-Translation/日服备份.zip" JP
-          python -m tools.format "BA-Assets-TableBundles/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip"
 
       - name: Commit files Translation
         run: |
