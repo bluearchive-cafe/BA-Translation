@@ -56,7 +56,6 @@ jobs:
 
       - name: Run update
         run: |
-          git clone --depth 1 git@github.com:asfu222/beicheng.git beicheng
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
 
           python -m tools.clean "BA-Assets-TableBundles/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" JP
@@ -76,29 +75,5 @@ jobs:
             git push origin
           else
             echo "No changes to commit in BA-Text-Translation"
-          fi
-          cd ..
-
-      - name: Commit files beicheng
-        run: |
-          cd beicheng
-          git add .
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "提交汉化文本 $(date +%F-%T)"
-            git push origin
-          else
-            echo "No changes to commit in beicheng"
-          fi
-          cd ..
-
-      - name: Commit files Localized
-        run: |
-          cd Localized
-          git add .
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "提交汉化文本 $(date +%F-%T)"
-            git push origin
-          else
-            echo "No changes to commit in Localized"
           fi
           cd ..
