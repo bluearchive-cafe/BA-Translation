@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [Android, IOS]
+        platform: [Android, iOS]
         segment: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]
     runs-on: ubuntu-latest
     steps:
@@ -55,6 +55,7 @@ jobs:
 
       - run: |
           chmod +x ./other/MemoryPackRepacker
+          # 传入 --repo 参数指定 BA-Image 仓库路径用于读取旧数据
           python update_bundles.py --platform ${{ matrix.platform }} --segment ${{ matrix.segment }} --total 15 --repo ./ba_image_repo
 
       - uses: actions/upload-artifact@v4
@@ -89,10 +90,12 @@ jobs:
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
 
+          # 合并 bundle_config
           python -c "
           import json, glob, os
           for p in ['android', 'ios']:
               full = {}
+              # 查找 artifacts 中所有的 config 文件
               files = glob.glob(f'merged_artifacts/assets-*/configs/bundle_config_{p}.json')
               for f in files:
                   with open(f) as j:
@@ -103,10 +106,12 @@ jobs:
                       json.dump(full, out, indent=4)
           "
           
+          # 1. 提交主仓库的 config 更新
           git add bundle_config_*.json
           git commit -m "Update Assets Config" || echo "No config changes"
           git push origin main
 
+          # 2. 提交角色立绘 (Spine Characters)
           git clone git@github.com:bluearchive-cafe/spinecharacters.git repo_chars
           cp -r merged_artifacts/assets-*/output_assets/spinecharacters/* repo_chars/ 2>/dev/null || true
           cd repo_chars
@@ -115,6 +120,7 @@ jobs:
           git push origin 角色立绘
           cd ..
 
+          # 3. 提交记忆大厅 (Spine Lobbies)
           git clone git@github.com:bluearchive-cafe/spinelobbies.git repo_lobbies
           cp -r merged_artifacts/assets-*/output_assets/spinelobbies/* repo_lobbies/ 2>/dev/null || true
           cd repo_lobbies
@@ -123,6 +129,9 @@ jobs:
           git push origin 记忆大厅
           cd ..
           
+          # 4. 提交 BA-Image (BundlePackingInfo)
+          # 注意：虽然我们在 matrix 中并行运行，但每个 segment 生成的 BundlePackingInfo 是相同的（因为是基于同一个服务器目录生成的）
+          # 所以直接覆盖即可
           git clone git@github.com:bluearchive-cafe/BA-Image.git repo_ba_image
           cp merged_artifacts/assets-*/configs/BundlePackingInfo_*.json repo_ba_image/ 2>/dev/null || true
           cd repo_ba_image
