@@ -1,4 +1,4 @@
-Name: Update Bundles
+name: Update Bundles
 
 on:
   workflow_dispatch:
@@ -83,22 +83,22 @@ jobs:
           find tmp_unpack -name "*.bundle" | while read b; do
             name=$(basename "$b" | tr 'A-Z' 'a-z')
             if [[ "$name" == *spinecharacters* ]]; then
-              python - "$b" <<'EOF'
-import sys
-from xtractor.bundle import BundleExtractor
-b_path = sys.argv[1]
-be = BundleExtractor(EXTRACT_DIR="extracted/spinecharacters")
-be.extract_bundle(b_path, extract_types=["TextAsset","Texture2D"])
-EOF
+              python - "$b" <<-'EOF'
+                import sys
+                from xtractor.bundle import BundleExtractor
+                b_path = sys.argv[1]
+                be = BundleExtractor(EXTRACT_DIR="extracted/spinecharacters")
+                be.extract_bundle(b_path, extract_types=["TextAsset","Texture2D"])
+							EOF
             fi
             if [[ "$name" == *spinelobbies* ]]; then
-              python - "$b" <<'EOF'
-import sys
-from xtractor.bundle import BundleExtractor
-b_path = sys.argv[1]
-be = BundleExtractor(EXTRACT_DIR="extracted/spinelobbies")
-be.extract_bundle(b_path, extract_types=["TextAsset","Texture2D"])
-EOF
+              python - "$b" <<-'EOF'
+                import sys
+                from xtractor.bundle import BundleExtractor
+                b_path = sys.argv[1]
+                be = BundleExtractor(EXTRACT_DIR="extracted/spinelobbies")
+                be.extract_bundle(b_path, extract_types=["TextAsset","Texture2D"])
+							EOF
             fi
           done
 
@@ -162,14 +162,14 @@ EOF
               name=$(basename "$img" | sed 's/\.[^.]*$//')
               if grep -q "\"$name\"" configs/bundle_config_*.json; then
                 keep=1
-                python - "$name" "$img" <<'EOF'
-import sys
-from xtractor.bundle import BundleExtractor
-name = sys.argv[1]
-img = sys.argv[2]
-be = BundleExtractor()
-be.modify_and_replace("work", name, img, False)
-EOF
+                python - "$name" "$img" <<-'EOF'
+                  import sys
+                  from xtractor.bundle import BundleExtractor
+                  name = sys.argv[1]
+                  img = sys.argv[2]
+                  be = BundleExtractor()
+                  be.modify_and_replace("work", name, img, False)
+								EOF
               fi
             done
             if [[ $keep -eq 1 ]]; then
@@ -219,47 +219,47 @@ EOF
 
       - run: |
           mkdir -p SpineConverter
-          cat <<'EOF' > SpineConverter/SpineConverter.csproj
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-</Project>
-EOF
+          cat <<-'EOF' > SpineConverter/SpineConverter.csproj
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net8.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+					EOF
 
-          cat <<'EOF' > SpineConverter/Program.cs
-using System;
-using System.IO;
-using Spine;
-namespace SpineConverter {
-    class Program {
-        static void Main(string[] args) {
-            if (args.Length < 1) return;
-            try {
-                var loader = new DeploymentAttachmentLoader();
-                var binary = new SkeletonBinary(loader);
-                using (var stream = new FileStream(args[0], FileMode.Open, FileAccess.Read)) {
-                    SkeletonData data = binary.ReadSkeletonData(stream);
-                    Console.WriteLine("ANIM_DATA_START");
-                    foreach (var anim in data.Animations) {
-                        Console.WriteLine(anim.Name + "|" + anim.Duration);
+          cat <<-'EOF' > SpineConverter/Program.cs
+            using System;
+            using System.IO;
+            using Spine;
+            namespace SpineConverter {
+                class Program {
+                    static void Main(string[] args) {
+                        if (args.Length < 1) return;
+                        try {
+                            var loader = new DeploymentAttachmentLoader();
+                            var binary = new SkeletonBinary(loader);
+                            using (var stream = new FileStream(args[0], FileMode.Open, FileAccess.Read)) {
+                                SkeletonData data = binary.ReadSkeletonData(stream);
+                                Console.WriteLine("ANIM_DATA_START");
+                                foreach (var anim in data.Animations) {
+                                    Console.WriteLine(anim.Name + "|" + anim.Duration);
+                                }
+                                Console.WriteLine("ANIM_DATA_END");
+                            }
+                        } catch (Exception) { Environment.Exit(1); }
                     }
-                    Console.WriteLine("ANIM_DATA_END");
                 }
-            } catch (Exception) { Environment.Exit(1); }
-        }
-    }
-    public class DeploymentAttachmentLoader : AttachmentLoader {
-        public RegionAttachment NewRegionAttachment(Skin skin, string name, string path, Sequence sequence) => new RegionAttachment(name);
-        public MeshAttachment NewMeshAttachment(Skin skin, string name, string path, Sequence sequence) => new MeshAttachment(name);
-        public BoundingBoxAttachment NewBoundingBoxAttachment(Skin skin, string name) => new BoundingBoxAttachment(name);
-        public PathAttachment NewPathAttachment(Skin skin, string name) => new PathAttachment(name);
-        public PointAttachment NewPointAttachment(Skin skin, string name) => new PointAttachment(name);
-        public ClippingAttachment NewClippingAttachment(Skin skin, string name) => new ClippingAttachment(name);
-    }
-}
-EOF
+                public class DeploymentAttachmentLoader : AttachmentLoader {
+                    public RegionAttachment NewRegionAttachment(Skin skin, string name, string path, Sequence sequence) => new RegionAttachment(name);
+                    public MeshAttachment NewMeshAttachment(Skin skin, string name, string path, Sequence sequence) => new MeshAttachment(name);
+                    public BoundingBoxAttachment NewBoundingBoxAttachment(Skin skin, string name) => new BoundingBoxAttachment(name);
+                    public PathAttachment NewPathAttachment(Skin skin, string name) => new PathAttachment(name);
+                    public PointAttachment NewPointAttachment(Skin skin, string name) => new PointAttachment(name);
+                    public ClippingAttachment NewClippingAttachment(Skin skin, string name) => new ClippingAttachment(name);
+                }
+            }
+					EOF
 
       - run: dotnet build SpineConverter/SpineConverter.csproj -c Release -o build
 
