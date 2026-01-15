@@ -79,6 +79,7 @@ jobs:
       - name: Clone Repos
         run: |
           git clone git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
