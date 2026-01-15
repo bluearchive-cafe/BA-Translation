@@ -91,11 +91,13 @@ jobs:
 
       - run: python repack_bundles.py
 
-      - name: Upload
-        uses: actions/upload-artifact@v4
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: repack_zips
-          path: modified_zips
+          tag_name: run-${{ github.run_id }}
+          name: Bundles ${{ github.run_id }}
+          files: |
+            output_zips/Android/*.zip
 
   extract-spine:
     runs-on: ubuntu-latest
