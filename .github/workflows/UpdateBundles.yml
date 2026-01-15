@@ -59,12 +59,6 @@ jobs:
           git commit -m "Update bundle config" || true
           git push origin main || true
 
-          git clone git@github.com:bluearchive-cafe/BA-Image.git ba_img
-          cp output/BundlePackingInfo_*.json ba_img/ 2>/dev/null || true
-          cd ba_img
-          git add .
-          git commit -m "Update BundlePackingInfo" || true
-          git push origin main || true
 
   repack-bundles:
     runs-on: ubuntu-latest
