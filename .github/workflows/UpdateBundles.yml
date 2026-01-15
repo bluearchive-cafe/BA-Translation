@@ -33,6 +33,8 @@ jobs:
           python-version: '3.12'
 
       - run: pip install UnityPy Pillow requests
+      
+      - run: chmod +x ./other/MemoryPackRepacker
 
       - run: python update_bundles_config.py
 
