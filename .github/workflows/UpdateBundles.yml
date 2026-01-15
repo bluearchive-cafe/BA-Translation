@@ -83,22 +83,24 @@ jobs:
           find tmp_unpack -name "*.bundle" | while read b; do
             name=$(basename "$b" | tr 'A-Z' 'a-z')
             if [[ "$name" == *spinecharacters* ]]; then
-              python - "$b" <<'EOF'
-import sys
-from xtractor.bundle import BundleExtractor
-b_path = sys.argv[1]
-be = BundleExtractor(EXTRACT_DIR="extracted/spinecharacters")
-be.extract_bundle(b_path, extract_types=["TextAsset","Texture2D"])
-EOF
+              cat <<EOF > 测试.py
+              import sys
+              from xtractor.bundle import BundleExtractor
+              b_path = sys.argv[1]
+              be = BundleExtractor(EXTRACT_DIR="extracted/spinecharacters")
+              be.extract_bundle(b_path, extract_types=["TextAsset","Texture2D"])
+              EOF
+              python 测试.py "$b"
             fi
             if [[ "$name" == *spinelobbies* ]]; then
-              python - "$b" <<'EOF'
-import sys
-from xtractor.bundle import BundleExtractor
-b_path = sys.argv[1]
-be = BundleExtractor(EXTRACT_DIR="extracted/spinelobbies")
-be.extract_bundle(b_path, extract_types=["TextAsset","Texture2D"])
-EOF
+              cat <<EOF > 测试1.py
+              import sys
+              from xtractor.bundle import BundleExtractor
+              b_path = sys.argv[1]
+              be = BundleExtractor(EXTRACT_DIR="extracted/spinelobbies")
+              be.extract_bundle(b_path, extract_types=["TextAsset","Texture2D"])
+              EOF
+              python 测试1.py "$b"
             fi
           done
 
@@ -162,14 +164,17 @@ EOF
               name=$(basename "$img" | sed 's/\.[^.]*$//')
               if grep -q "\"$name\"" configs/bundle_config_*.json; then
                 keep=1
-                python - "$name" "$img" <<'EOF'
-import sys
-from xtractor.bundle import BundleExtractor
-name = sys.argv[1]
-img = sys.argv[2]
-be = BundleExtractor()
-be.modify_and_replace("work", name, img, False)
-EOF
+
+                cat <<EOF > modify_image.py
+                import sys
+                from xtractor.bundle import BundleExtractor
+                name = sys.argv[1]
+                img = sys.argv[2]
+                be = BundleExtractor()
+                be.modify_and_replace("work", name, img, False)
+                EOF
+
+                python modify_image.py "$name" "$img"
               fi
             done
             if [[ $keep -eq 1 ]]; then
