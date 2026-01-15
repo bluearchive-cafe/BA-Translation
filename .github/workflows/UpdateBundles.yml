@@ -1,4 +1,4 @@
-name: Update Bundles & Spine
+name: Update Bundles
 
 on:
   workflow_dispatch:
@@ -9,15 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: "[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]"
-    steps:
-      - run: echo "Start"
-
-  download_and_modify:
-    needs: prepare
+  scan_and_download:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -26,190 +18,217 @@ jobs:
         segment: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]
     steps:
       - uses: actions/checkout@v4
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh && echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-      - name: Clone Tools & Image Repo
-        run: |
-          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
-          cp -r tool/* .
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
-      - name: Setup Python
-        uses: actions/setup-python@v5
+
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Install
-        run: pip install -r requirements.txt UnityPy Pillow requests
-      - name: Run
-        run: |
+
+      - run: |
+          pip install UnityPy pillow requests
+
+      - run: |
           chmod +x ./other/MemoryPackRepacker
-          python update_bundles.py --platform ${{ matrix.platform }} --segment ${{ matrix.segment }} --total 15 --repo ./ba_image_repo
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+          python bundle.py --platform ${{ matrix.platform }} --segment ${{ matrix.segment }} --total 15 --repo ./BA-Image
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: part-${{ matrix.platform }}-${{ matrix.segment }}
+          name: cache-${{ matrix.platform }}-${{ matrix.segment }}
           path: |
+            cache/
             configs/
-            modified_zips/
-            spine_raw/
-            master_info/
-          if-no-files-found: ignore
 
-  process_results:
-    needs: download_and_modify
+  job1_spine_extract:
+    needs: scan_and_download
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh && echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
       - uses: actions/download-artifact@v4
         with:
-          path: all_parts
-      
-      - name: Collect Master Info and Patched Zips
-        run: |
-          mkdir -p final_zip_collection
-          # 提取汇总所有修改过的 ZIP
-          find all_parts -name "*.zip" -path "*/modified_zips/*" -exec cp {} final_zip_collection/ \;
-          
-          # 汇总 PackingInfo (只从 segment 0 的 master_info 文件夹中取)
-          mkdir -p packing_info_to_sync
-          find all_parts -name "BundlePackingInfo_*.json" -path "*/master_info/*" -exec cp {} packing_info_to_sync/ \;
-          
-          # 压缩所有 Patch Zip 作为一个附件
-          if [ "$(ls -A final_zip_collection)" ]; then
-            zip -j All_Patched_Packs.zip final_zip_collection/*.zip
-          else
-            echo "No patched zips found" && touch All_Patched_Packs.zip
-          fi
-      
-      - name: Upload Patched Packs
-        uses: actions/upload-artifact@v4
-        with:
-          name: Patched-Bundles-Zip
-          path: All_Patched_Packs.zip
+          path: artifacts
 
-      - name: Update Config and Push Image Repo
-        run: |
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          
-          # 合并 bundle_config.json
-          python -c "
-          import json, glob, os
-          for p in ['android', 'ios']:
-              full = {}
-              for f in glob.glob(f'all_parts/part-{p.capitalize()}-*/configs/bundle_config_{p}.json'):
-                  with open(f) as j: full.update(json.load(j))
-              if full:
-                  with open(f'bundle_config_{p}.json', 'w') as out: json.dump(full, out, indent=4)
-          "
-          git add bundle_config_*.json && git commit -m "Update Global Config" && git push origin main || true
+      - run: |
+          pip install UnityPy pillow xtractor
 
-          # 更新 BA-Image 仓库 (只用从 master_info 提取的那份)
-          git clone git@github.com:bluearchive-cafe/BA-Image.git ba_img
-          cp packing_info_to_sync/BundlePackingInfo_*.json ba_img/ 2>/dev/null || true
-          cd ba_img && git add . && git commit -m "Update Info" && git push origin main || true
-
-  convert_spine:
-    needs: download_and_modify
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deps
-        run: |
-          sudo apt-get update && sudo apt-get install -y xvfb ffmpeg libsfml-graphics2.6 libsfml-window2.6 libsfml-system2.6
-          curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.16.13/SpineViewerCLI-v0.16.13-Linux-SelfContained.zip
-          unzip tool.zip && chmod +x SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
-      - uses: actions/download-artifact@v4
-        with:
-          path: all_parts
-
-      - name: Build SpineConverter
-        run: |
-          git clone --depth 1 -b 4.2 https://github.com/EsotericSoftware/spine-runtimes.git
-          mkdir -p SpineConverter/spine-csharp
-          cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
-          cat <<EOF > SpineConverter/SpineConverter.csproj
-          <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>
-          EOF
-          cat <<EOF > SpineConverter/Program.cs
-          using System;using System.IO;using Spine;
-          namespace SpineConverter { class Program { static void Main(string[] args) {
-            try { var loader = new DeploymentAttachmentLoader(); var binary = new SkeletonBinary(loader);
-            using (var stream = new FileStream(args[0], FileMode.Open)) { var data = binary.ReadSkeletonData(stream);
-            Console.WriteLine("ANIM_DATA_START"); foreach (var anim in data.Animations) Console.WriteLine(anim.Name + "|" + anim.Duration); Console.WriteLine("ANIM_DATA_END"); }
-            } catch { Environment.Exit(1); } } }
-            public class DeploymentAttachmentLoader : AttachmentLoader {
-              public RegionAttachment NewRegionAttachment(Skin s, string n, string p, Sequence q) => new RegionAttachment(n);
-              public MeshAttachment NewMeshAttachment(Skin s, string n, string p, Sequence q) => new MeshAttachment(n);
-              public BoundingBoxAttachment NewBoundingBoxAttachment(Skin s, string n) => new BoundingBoxAttachment(n);
-              public PathAttachment NewPathAttachment(Skin s, string n) => new PathAttachment(n);
-              public PointAttachment NewPointAttachment(Skin s, string n) => new PointAttachment(n);
-              public ClippingAttachment NewClippingAttachment(Skin s, string n) => new ClippingAttachment(n);
-          } }
-          EOF
-          dotnet build SpineConverter/SpineConverter.csproj -c Release -o ./build
-
-      - name: Push Spine Repos
-        run: |
-          mkdir -p ~/.ssh && echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          
-          git clone -b 角色立绘 git@github.com:bluearchive-cafe/spinecharacters.git repo_raw
-          git clone git@github.com:bluearchive-cafe/BA-SpineCharacters.git repo_zip
-          
-          TOOL_PATH="$(pwd)/SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI"
-          ST_PATH="$(pwd)/st_build/ST"
-          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-          export DISPLAY=:99
-
-          find all_parts -type d -name "TextAsset" | while read ta_dir; do
-            char_root=$(dirname "$ta_dir")
-            char_name=$(basename "$char_root")
-            
-            # 1. 提交到 spinecharacters.git (原始结构，原文件名)
-            mkdir -p "repo_raw/$char_name"
-            cp -r "$char_root"/* "repo_raw/$char_name/"
-
-            # 2. 转换并提交到 BA-SpineCharacters.git
-            CONV_DIR="conv_$char_name"
-            mkdir -p "$CONV_DIR/out"
-            
-            # 自动识别：查找该角色目录下最大的文件（通常是 .skel）或带有 skel 字样的文件
-            SKEL_FILE=$(find "$ta_dir" -type f | xargs ls -S | head -n 1)
-            # 找到匹配的 .atlas 文件
-            ATLAS_FILE=$(find "$ta_dir" -type f -name "*.atlas*" | head -n 1)
-            
-            [ -z "$SKEL_FILE" ] && continue
-            
-            # 复制所有文件到转换目录，并为了让 CLI 识别，暂时软链接为规范名
-            cp "$SKEL_FILE" "$CONV_DIR/char.skel"
-            cp "$ATLAS_FILE" "$CONV_DIR/char.atlas"
-            cp "$char_root/Texture2D"/*.png "$CONV_DIR/"
-            
-            cd "$CONV_DIR"
-            # 获取动画列表
-            ANIMS=$($ST_PATH "char.skel" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v "ANIM_DATA_")
-            IFS=$'\n'
-            for line in $ANIMS; do
-              anim=$(echo "$line" | cut -d'|' -f1)
-              # 执行导出
-              $TOOL_PATH export "char.skel" --format Png --animations "$anim" --output "out/${anim}.png" --quiet || true
-            done
-            
-            # 打包 ZIP
-            if [ "$(ls -A out)" ]; then
-              cd out && zip -r "../../../repo_zip/${char_name}.zip" . && cd ../..
-            else
-              cd ..
+      - run: |
+          mkdir -p extracted/spinecharacters extracted/spinelobbies
+          find artifacts -name "*.zip" | while read z; do
+            unzip -o "$z" -d tmp_unpack
+            rm "$z"
+          done
+          find tmp_unpack -name "*.bundle" | while read b; do
+            name=$(basename "$b" | tr 'A-Z' 'a-z')
+            if [[ "$name" == *spinecharacters* ]]; then
+              python - <<EOF
+              from xtractor.bundle import BundleExtractor
+              be = BundleExtractor(EXTRACT_DIR="extracted/spinecharacters")
+              be.extract_bundle("$b", extract_types=["TextAsset","Texture2D"])
+              EOF
+            fi
+            if [[ "$name" == *spinelobbies* ]]; then
+              python - <<EOF
+              from xtractor.bundle import BundleExtractor
+              be = BundleExtractor(EXTRACT_DIR="extracted/spinelobbies")
+              be.extract_bundle("$b", extract_types=["TextAsset","Texture2D"])
+              EOF
             fi
           done
 
-          cd repo_raw && git add . && git commit -m "Update Raw" && git push origin 角色立绘 || true
-          cd ../repo_zip && git add . && git commit -m "Update PNG Zips" && git push origin main || true
+      - run: |
+          git clone git@github.com:bluearchive-cafe/spinecharacters.git repo_chars
+          cp -r extracted/spinecharacters/* repo_chars/ || true
+          cd repo_chars
+          git add .
+          git commit -m "Update spinecharacters source" || true
+          git push origin main
+
+      - run: |
+          git clone git@github.com:bluearchive-cafe/spinelobbies.git repo_lobbies
+          cp -r extracted/spinelobbies/* repo_lobbies/ || true
+          cd repo_lobbies
+          git add .
+          git commit -m "Update spinelobbies source" || true
+          git push origin main
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spine_sources
+          path: extracted/
+
+  job2_modify_bundles:
+    needs: scan_and_download
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - run: |
+          pip install pillow UnityPy xtractor
+
+      - run: |
+          git clone git@github.com:bluearchive-cafe/BA-Image.git ba_image
+          mkdir -p modified_zips
+          for z in artifacts/**/**/*.zip; do
+            unzip -o "$z" -d work
+            keep=0
+            for img in $(find ba_image -type f -name "*.png"); do
+              name=$(basename "$img" | sed 's/\.[^.]*$//')
+              if grep -q "\"$name\"" configs/bundle_config_*.json; then
+                keep=1
+                python - <<EOF
+                from xtractor.bundle import BundleExtractor
+                be = BundleExtractor()
+                be.modify_and_replace("work","$name","$img",False)
+                EOF
+              fi
+            done
+            if [[ $keep -eq 1 ]]; then
+              cd work
+              zip -r "../modified_zips/$(basename $z)" .
+              cd ..
+            fi
+            rm -rf work
+          done
+
+      - run: |
+          git clone git@github.com:bluearchive-cafe/BA-AssetsBundles.git repo_assets
+          cp modified_zips/*.zip repo_assets/ || true
+          cd repo_assets
+          git add .
+          git commit -m "Update modified bundles" || true
+          git push origin main
+
+  job3_spine_process:
+    needs: job1_spine_extract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: spine_sources
+          path: spine_sources
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - run: |
+          git clone --depth 1 -b 4.2 https://github.com/EsotericSoftware/spine-runtimes.git
+          mkdir -p SpineConverter/spine-csharp
+          cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
+
+      - run: |
+          mkdir -p SpineConverter
+          cat <<EOF > SpineConverter/SpineConverter.csproj
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net8.0</TargetFramework>
+            </PropertyGroup>
+          </Project>
+          EOF
+
+          cat <<EOF > SpineConverter/Program.cs
+          using System;
+          using System.IO;
+          using Spine;
+          namespace SpineConverter {
+              class Program {
+                  static void Main(string[] args) {
+                      if (args.Length < 1) return;
+                      try {
+                          var loader = new DeploymentAttachmentLoader();
+                          var binary = new SkeletonBinary(loader);
+                          using (var stream = new FileStream(args[0], FileMode.Open, FileAccess.Read)) {
+                              SkeletonData data = binary.ReadSkeletonData(stream);
+                              Console.WriteLine("ANIM_DATA_START");
+                              foreach (var anim in data.Animations) {
+                                  Console.WriteLine(anim.Name + "|" + anim.Duration);
+                              }
+                              Console.WriteLine("ANIM_DATA_END");
+                          }
+                      } catch (Exception) { Environment.Exit(1); }
+                  }
+              }
+              public class DeploymentAttachmentLoader : AttachmentLoader {
+                  public RegionAttachment NewRegionAttachment(Skin skin, string name, string path, Sequence sequence) => new RegionAttachment(name);
+                  public MeshAttachment NewMeshAttachment(Skin skin, string name, string path, Sequence sequence) => new MeshAttachment(name);
+                  public BoundingBoxAttachment NewBoundingBoxAttachment(Skin skin, string name) => new BoundingBoxAttachment(name);
+                  public PathAttachment NewPathAttachment(Skin skin, string name) => new PathAttachment(name);
+                  public PointAttachment NewPointAttachment(Skin skin, string name) => new PointAttachment(name);
+                  public ClippingAttachment NewClippingAttachment(Skin skin, string name) => new ClippingAttachment(name);
+              }
+          }
+          EOF
+
+      - run: dotnet build SpineConverter/SpineConverter.csproj -c Release -o build
+
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg libfontconfig1 libicu-dev libgl1-mesa-dev
+
+      - run: |
+          curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.16.13/SpineViewerCLI-v0.16.13-Linux-SelfContained.zip
+          unzip tool.zip
+          chmod +x SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
+
+      - run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          export DISPLAY=:99
+          mkdir -p output_png
+          find spine_sources -name "*.skel" | while read skel; do
+            RAW=$(./build/SpineConverter "$skel")
+            ANIMS=$(echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM)
+            for l in $ANIMS; do
+              a=$(echo "$l" | cut -d'|' -f1)
+              SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI export "$skel" --format Png --animations "$a" --output "output_png/${a}.png" --quiet || true
+            done
+          done
+          
+          
+          
+          
