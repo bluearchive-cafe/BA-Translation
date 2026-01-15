@@ -189,6 +189,12 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Clone Spine Runtime
+        run: |
+          git clone https://github.com/EsotericSoftware/spine-runtimes.git
+          mkdir -p SpineConverter/spine-csharp
+          cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
+
       - name: Build SpineConverter
         run: dotnet build SpineConverter/SpineConverter.csproj -c Release
 
