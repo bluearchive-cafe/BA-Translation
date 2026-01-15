@@ -12,18 +12,19 @@ jobs:
   generate-config:
     runs-on: ubuntu-latest
     outputs:
-      cache-key: run-${{ github.run_id }}
       has-cache: ${{ steps.check-cache.outputs.has-cache }}
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: SSH
+        run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - run: |
+      - name: Clone Repos
+        run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
@@ -33,10 +34,10 @@ jobs:
           python-version: '3.12'
 
       - run: pip install UnityPy Pillow requests
-      
       - run: chmod +x ./other/MemoryPackRepacker
 
-      - run: python update_bundles_config.py
+      - name: Generate Config & Download Changed Zips
+        run: python update_bundles_config.py
 
       - id: check-cache
         run: |
@@ -52,10 +53,11 @@ jobs:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - run: |
+      - name: Commit Config
+        run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          git add bundle_config_*.json
+          git add bundle_config_*.json || true
           git commit -m "Update bundle config" || true
           git push origin main || true
 
@@ -67,14 +69,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: SSH
+        run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
+      - name: Clone Repos
+        run: |
+          git clone git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
@@ -89,7 +93,15 @@ jobs:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - run: python repack_bundles.py
+      - name: Repack Bundles
+        run: python repack_bundles.py
+
+      - name: Commit Asset Bundles Cache
+        run: |
+          cd BA-AssetsBundles
+          git add .
+          git commit -m "Update processed bundles" || true
+          git push origin main || true
 
       - name: Upload Release
         uses: softprops/action-gh-release@v2
@@ -108,7 +120,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: SSH
+        run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
@@ -125,7 +138,8 @@ jobs:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - run: |
+      - name: Clone Spine Repos
+        run: |
           git clone git@github.com:bluearchive-cafe/spinecharacters.git
           git clone git@github.com:bluearchive-cafe/spinelobbies.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
@@ -134,9 +148,11 @@ jobs:
       - id: extract
         run: python extract_bundles.py
 
-      - run: |
+      - name: Commit New Spine Characters
+        run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
+
           for repo in spinecharacters spinelobbies; do
             cd $repo
             if [ -n "$(git status --porcelain)" ]; then
@@ -146,6 +162,7 @@ jobs:
             fi
             cd ..
           done
+
 
   convert-spine:
     runs-on: ubuntu-latest
@@ -189,7 +206,7 @@ jobs:
       - name: Prepare Spine Jobs
         run: python extract_spine_assets.py
 
-      - name: Convert Spine → PNG → ZIP
+      - name: Convert Spine to PNG
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
@@ -202,7 +219,7 @@ jobs:
             out="output/$role"
             mkdir -p "$out"
 
-            RAW=$(dotnet run --project tools/SpineConverter -- "$skel")
+            RAW=$(dotnet run --project SpineConverter -- "$skel")
             echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | \
               grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
                 $TOOL export "$skel" \
@@ -215,11 +232,10 @@ jobs:
             (cd output && zip -r "${role}.zip" "$role")
           done
 
-      - name: Commit Output
+      - name: Commit Spine Output
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          git add output/*.zip
+          git add output/*.zip || true
           git commit -m "Add spine animation zips" || true
           git push origin main || true
-
