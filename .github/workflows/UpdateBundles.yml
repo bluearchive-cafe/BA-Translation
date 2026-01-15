@@ -23,6 +23,18 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
+      - name: Prepare Tool Environment
+        run: |
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          cp -r tool/* . && rm -rf tool
+
       - run: |
           pip install UnityPy pillow requests
 
@@ -46,6 +58,18 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
+      - name: Prepare Tool Environment
+        run: |
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          cp -r tool/* . && rm -rf tool
 
       - run: |
           pip install UnityPy pillow xtractor
@@ -105,6 +129,18 @@ jobs:
         with:
           path: artifacts
 
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
+      - name: Prepare Tool Environment
+        run: |
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          cp -r tool/* . && rm -rf tool
+
       - run: |
           pip install pillow UnityPy xtractor
 
@@ -155,6 +191,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
       - run: |
           git clone --depth 1 -b 4.2 https://github.com/EsotericSoftware/spine-runtimes.git
@@ -208,7 +251,6 @@ jobs:
       - run: dotnet build SpineConverter/SpineConverter.csproj -c Release -o build
 
       - run: |
-          sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libfontconfig1 libicu-dev libgl1-mesa-dev
 
       - run: |
@@ -217,18 +259,40 @@ jobs:
           chmod +x SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
 
       - run: |
-          Xvfb :99 -screen 0 1024x768x24 &
+          Xvfb :99 -screen 0 1024x768x24 -nolisten tcp > /dev/null 2>&1 &
           export DISPLAY=:99
-          mkdir -p output_png
-          find spine_sources -name "*.skel" | while read skel; do
-            RAW=$(./build/SpineConverter "$skel")
-            ANIMS=$(echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM)
-            for l in $ANIMS; do
-              a=$(echo "$l" | cut -d'|' -f1)
-              SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI export "$skel" --format Png --animations "$a" --output "output_png/${a}.png" --quiet || true
+          sleep 3
+
+          mkdir -p spine_png_output
+
+          find spine_sources -type f -name "*.skel" | while read skel; do
+            char_dir=$(dirname "$(dirname "$skel")")
+            char_name=$(basename "$char_dir")
+
+            mkdir -p "spine_png_output/$char_name"
+
+            RAW_OUT=$(./build/SpineConverter "$skel" || true)
+            ANIM_DATA=$(echo "$RAW_OUT" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA)
+
+            IFS=$'\n'
+            for line in $ANIM_DATA; do
+              anim_name=$(echo "$line" | cut -d'|' -f1)
+              ./SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI export \
+                "$skel" \
+                --format Png \
+                --animations "$anim_name" \
+                --output "spine_png_output/$char_name/${anim_name}.png" \
+                --quiet || true
             done
           done
-          
-          
-          
-          
+
+      - run: |
+          git clone git@github.com:bluearchive-cafe/BA-SpineCharacters.git repo_chars
+          cp -r spine_png_output/* repo_chars/ || true
+          cd repo_chars
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add .
+          git commit -m "Update spine rendered png" || true
+          git push origin main
+
