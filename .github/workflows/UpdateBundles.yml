@@ -40,7 +40,7 @@ jobs:
 
       - run: |
           chmod +x ./other/MemoryPackRepacker
-          python update_bundle.py --platform ${{ matrix.platform }} --segment ${{ matrix.segment }} --total 15 --repo ./BA-Image
+          python update_bundles.py --platform ${{ matrix.platform }} --segment ${{ matrix.segment }} --total 15 --repo ./BA-Image
 
       - uses: actions/upload-artifact@v4
         with:
