@@ -27,8 +27,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          submodules: false
 
       - name: Configure SSH
         run: |
@@ -42,7 +40,7 @@ jobs:
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* . && rm -rf tool
 
-      - name: Clone BA-Image Repo (For Image Replacement)
+      - name: Clone BA-Image Repo
         run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
 
@@ -57,10 +55,8 @@ jobs:
       - name: Run Update Script
         run: |
           chmod +x ./other/MemoryPackRepacker
-          # 脚本会生成 configs/, modified_packs/, spine_raw/
           python update_bundles.py --platform ${{ matrix.platform }} --segment ${{ matrix.segment }} --total 15 --repo ./ba_image_repo
 
-      # 上传所有产物供后续步骤或合并使用
       - uses: actions/upload-artifact@v4
         with:
           name: artifacts-${{ matrix.platform }}-${{ matrix.segment }}
@@ -68,6 +64,7 @@ jobs:
             configs/
             modified_packs/
             spine_raw/
+          if-no-files-found: ignore
           retention-days: 1
 
   process_results:
@@ -88,53 +85,26 @@ jobs:
         with:
           path: all_artifacts
 
-      - name: Merge Configs & Push Image Repo Info
+      - name: Merge and Push Info
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-
-          # 1. 合并 bundle_config
+          
           python -c "
           import json, glob, os
           for p in ['android', 'ios']:
               full = {}
-              files = glob.glob(f'all_artifacts/artifacts-*/configs/bundle_config_{p}.json')
-              for f in files:
-                  with open(f) as j:
-                      d = json.load(j)
-                      if d: full.update(d)
+              for f in glob.glob(f'all_artifacts/artifacts-*/configs/bundle_config_{p}.json'):
+                  with open(f) as j: full.update(json.load(j))
               if full:
-                  with open(f'bundle_config_{p}.json', 'w') as out:
-                      json.dump(full, out, indent=4)
+                  with open(f'bundle_config_{p}.json', 'w') as out: json.dump(full, out, indent=4)
           "
-          
-          # 更新主仓库配置
-          git add bundle_config_*.json
-          git commit -m "Update Assets Config" || echo "No changes"
+          git add bundle_config_*.json && git commit -m "Update Config" || true
           git push origin main
 
-          # 2. 更新 BA-Image 的 BundlePackingInfo
-          git clone git@github.com:bluearchive-cafe/BA-Image.git repo_ba_image
-          cp all_artifacts/artifacts-*/configs/BundlePackingInfo_*.json repo_ba_image/ 2>/dev/null || true
-          cd repo_ba_image
-          git add BundlePackingInfo_*.json
-          git commit -m "Update BundlePackingInfo" || echo "No info changes"
-          git push origin main
-          cd ..
-
-      - name: Upload Modified Packs (Patch)
-        # 这里假设你需要将修改后的 Zip 上传到某个地方，或者作为 Release
-        # 你的 Prompt 说是"上传"，但没说传到哪，通常是传到 Release 或 Artifacts
-        # 这里将其打包为总 Artifact
-        run: |
-          mkdir -p final_patch
-          cp all_artifacts/artifacts-*/modified_packs/*.zip final_patch/ 2>/dev/null || true
-          
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Final-Patched-Bundles
-          path: final_patch/
-          retention-days: 1
+          git clone git@github.com:bluearchive-cafe/BA-Image.git ba_img_repo
+          cp all_artifacts/artifacts-*/configs/BundlePackingInfo_*.json ba_img_repo/ 2>/dev/null || true
+          cd ba_img_repo && git add . && git commit -m "Update Info" && git push origin main || true
 
   convert_spine:
     needs: download_and_modify
@@ -143,153 +113,90 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+      - name: Setup .NET & Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg libfontconfig1 libicu-dev libsfml-graphics2.6 libsfml-window2.6 libsfml-system2.6 libgl1-mesa-dev libxcursor1 libxinerama1 libxi6 libxrandr2
+          curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.16.13/SpineViewerCLI-v0.16.13-Linux-SelfContained.zip
+          unzip tool.zip && chmod +x SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           path: all_artifacts
 
-      - name: Prepare Spine Converter
+      - name: Build SpineConverter
         run: |
-          # 编译 Converter
           git clone --depth 1 -b 4.2 https://github.com/EsotericSoftware/spine-runtimes.git
           mkdir -p SpineConverter/spine-csharp
           cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
-
           cat <<EOF > SpineConverter/SpineConverter.csproj
-          <Project Sdk="Microsoft.NET.Sdk">
-            <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup>
-          </Project>
+          <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>
           EOF
-
           cat <<EOF > SpineConverter/Program.cs
-          using System;
-          using System.IO;
-          using Spine;
-          namespace SpineConverter {
-              class Program {
-                  static void Main(string[] args) {
-                      if (args.Length < 1) return;
-                      try {
-                          var loader = new DeploymentAttachmentLoader();
-                          var binary = new SkeletonBinary(loader);
-                          // 增加容错：如果找不到文件
-                          if (!File.Exists(args[0])) return;
-                          using (var stream = new FileStream(args[0], FileMode.Open, FileAccess.Read)) {
-                              SkeletonData data = binary.ReadSkeletonData(stream);
-                              Console.WriteLine("ANIM_DATA_START");
-                              foreach (var anim in data.Animations) {
-                                  Console.WriteLine(anim.Name + "|" + anim.Duration);
-                              }
-                              Console.WriteLine("ANIM_DATA_END");
-                          }
-                      } catch (Exception e) { Console.Error.WriteLine(e.Message); Environment.Exit(1); }
-                  }
-              }
-              public class DeploymentAttachmentLoader : AttachmentLoader {
-                  public RegionAttachment NewRegionAttachment(Skin skin, string name, string path, Sequence sequence) => new RegionAttachment(name);
-                  public MeshAttachment NewMeshAttachment(Skin skin, string name, string path, Sequence sequence) => new MeshAttachment(name);
-                  public BoundingBoxAttachment NewBoundingBoxAttachment(Skin skin, string name) => new BoundingBoxAttachment(name);
-                  public PathAttachment NewPathAttachment(Skin skin, string name) => new PathAttachment(name);
-                  public PointAttachment NewPointAttachment(Skin skin, string name) => new PointAttachment(name);
-                  public ClippingAttachment NewClippingAttachment(Skin skin, string name) => new ClippingAttachment(name);
-              }
-          }
+          using System;using System.IO;using Spine;
+          namespace SpineConverter { class Program { static void Main(string[] args) {
+            try { var loader = new DeploymentAttachmentLoader(); var binary = new SkeletonBinary(loader);
+            using (var stream = new FileStream(args[0], FileMode.Open)) { var data = binary.ReadSkeletonData(stream);
+            Console.WriteLine("ANIM_DATA_START"); foreach (var anim in data.Animations) Console.WriteLine(anim.Name + "|" + anim.Duration); Console.WriteLine("ANIM_DATA_END"); }
+            } catch { Environment.Exit(1); } } }
+            public class DeploymentAttachmentLoader : AttachmentLoader {
+              public RegionAttachment NewRegionAttachment(Skin s, string n, string p, Sequence q) => new RegionAttachment(n);
+              public MeshAttachment NewMeshAttachment(Skin s, string n, string p, Sequence q) => new MeshAttachment(n);
+              public BoundingBoxAttachment NewBoundingBoxAttachment(Skin s, string n) => new BoundingBoxAttachment(n);
+              public PathAttachment NewPathAttachment(Skin s, string n) => new PathAttachment(n);
+              public PointAttachment NewPointAttachment(Skin s, string n) => new PointAttachment(n);
+              public ClippingAttachment NewClippingAttachment(Skin s, string n) => new ClippingAttachment(n);
+          } }
           EOF
-          
           dotnet build SpineConverter/SpineConverter.csproj -c Release -o ./build
 
-      - name: Install Runtime Deps and SpineViewerCLI
+      - name: Process Repos
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg libfontconfig1 libicu-dev libsfml-graphics2.6 libsfml-window2.6 libsfml-system2.6 libgl1-mesa-dev libxcursor1 libxinerama1 libxi6 libxrandr2
-          curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.16.13/SpineViewerCLI-v0.16.13-Linux-SelfContained.zip
-          unzip tool.zip
-          chmod +x SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
-
-      - name: Convert and Push Spine Assets
-        run: |
-          mkdir -p repo_chars
-          
-          # 克隆目标仓库
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-          git clone git@github.com:bluearchive-cafe/spinecharacters.git repo_chars
+
+          git clone -b 角色立绘 git@github.com:bluearchive-cafe/spinecharacters.git repo_raw
+          git clone git@github.com:bluearchive-cafe/BA-SpineCharacters.git repo_zip
 
           TOOL_PATH="$(pwd)/SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI"
           CONVERTER_PATH="$(pwd)/build/SpineConverter"
-          
-          # 启动 Xvfb
           Xvfb :99 -screen 0 1024x768x24 -nolisten tcp > /dev/null 2>&1 &
-          export DISPLAY=:99
-          sleep 3
+          export DISPLAY=:99 && sleep 3
 
-          # 遍历所有提取出的 spine 资源
-          # 路径结构: all_artifacts/artifacts-*/spine_raw/character_name/TextAsset/*.skel
-          
-          find all_artifacts -name "*.skel.bytes" -o -name "*.skel" | while read skel_file; do
-             # 获取目录信息
-             dir_path=$(dirname "$skel_file")          # .../TextAsset
-             char_root=$(dirname "$dir_path")          # .../spine_raw/arona
-             char_name=$(basename "$char_root")        # arona
-             
-             echo "Processing $char_name ..."
-             
-             # 准备工作目录
-             WORK_DIR="work_$char_name"
-             mkdir -p "$WORK_DIR"
-             
-             # 移动资源到工作目录 (skel, atlas, png)
-             # 注意：UnityPy 提取的 .atlas 可能是 .txt 或 .bytes，需要重命名为 .atlas
-             cp "$skel_file" "$WORK_DIR/$char_name.skel"
-             
-             # 找 atlas
-             find "$char_root" -name "*.atlas*" | head -n 1 | xargs -I {} cp {} "$WORK_DIR/$char_name.atlas"
-             
-             # 找 texture (png)
-             # UnityPy 提取在 Texture2D 文件夹
-             cp "$char_root/Texture2D"/*.png "$WORK_DIR/" 2>/dev/null || true
-             
-             cd "$WORK_DIR"
-             
-             # 1. 获取动画列表
-             if [ -f "$char_name.skel" ]; then
-                 RAW_OUT=$($CONVERTER_PATH "$char_name.skel")
-                 ANIM_DATA=$(echo "$RAW_OUT" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v "ANIM_DATA_")
-                 
-                 mkdir -p output_pngs
-                 
-                 # 2. 导出 PNG 序列
-                 IFS=$'\n'
-                 for line in $ANIM_DATA; do
-                    anim_name=$(echo "$line" | cut -d'|' -f1)
-                    if [ ! -z "$anim_name" ]; then
-                        echo "  Exporting animation: $anim_name"
-                        $TOOL_PATH export "$char_name.skel" --format Png --animations "$anim_name" --output "output_pngs/${anim_name}.png" --quiet 2>/dev/null || true
-                    fi
-                 done
-                 
-                 # 3. 移动到仓库目录
-                 # 假设仓库结构为 character_name/animation.png
-                 TARGET_DIR="../repo_chars/$char_name"
-                 mkdir -p "$TARGET_DIR"
-                 cp output_pngs/*.png "$TARGET_DIR/" 2>/dev/null || true
-             fi
-             
-             cd ..
-             rm -rf "$WORK_DIR"
+          # 寻找所有提取的角色目录
+          find all_artifacts -type d -name "TextAsset" | while read ta_dir; do
+            char_root=$(dirname "$ta_dir")
+            char_name=$(basename "$char_root")
+            echo "Processing $char_name..."
+
+            # 1. 提交原始提取结构到 spinecharacters (包含 TextAsset 和 Texture2D 文件夹)
+            mkdir -p "repo_raw/$char_name"
+            cp -r "$char_root"/* "repo_raw/$char_name/"
+
+            # 2. 导出动态 PNG 序列到 BA-SpineCharacters
+            WORK_DIR="work_$char_name"
+            mkdir -p "$WORK_DIR/out"
+            skel_file=$(find "$ta_dir" -name "*.skel.bytes" | head -n 1)
+            [ -z "$skel_file" ] && continue
+            
+            # 准备转换环境 (将 skel 和 atlas 放在同级)
+            cp "$skel_file" "$WORK_DIR/$char_name.skel"
+            find "$ta_dir" -name "*.atlas.bytes" -exec cp {} "$WORK_DIR/$char_name.atlas" \;
+            cp "$char_root/Texture2D"/*.png "$WORK_DIR/" 2>/dev/null || true
+
+            cd "$WORK_DIR"
+            ANIM_DATA=$($CONVERTER_PATH "$char_name.skel" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v "ANIM_DATA_")
+            IFS=$'\n'
+            for line in $ANIM_DATA; do
+              anim=$(echo "$line" | cut -d'|' -f1)
+              $TOOL_PATH export "$char_name.skel" --format Png --animations "$anim" --output "out/${anim}.png" --quiet 2>/dev/null || true
+            done
+            cd out && zip -r "../../repo_zip/${char_name}.zip" . && cd ../..
           done
 
-          # 提交
-          cd repo_chars
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
-          git add .
-          git commit -m "Update Spine Characters (Dynamic PNGs)" || echo "No changes"
-          git push origin main
+          cd repo_raw && git config user.email "action@github.com" && git config user.name "GitHub Action"
+          git add . && git commit -m "Update Raw Spine" && git push origin 角色立绘 || true
+          cd ../repo_zip && git config user.email "action@github.com" && git config user.name "GitHub Action"
+          git add . && git commit -m "Update Spine ZIPs" && git push origin main || true
