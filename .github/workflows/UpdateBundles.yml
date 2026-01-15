@@ -154,50 +154,62 @@ jobs:
           EOF
           dotnet build SpineConverter/SpineConverter.csproj -c Release -o ./build
 
-      - name: Process Repos
+      - name: Push Spine Repos
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-
+          mkdir -p ~/.ssh && echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          
           git clone -b 角色立绘 git@github.com:bluearchive-cafe/spinecharacters.git repo_raw
           git clone git@github.com:bluearchive-cafe/BA-SpineCharacters.git repo_zip
-
+          
           TOOL_PATH="$(pwd)/SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI"
-          CONVERTER_PATH="$(pwd)/build/SpineConverter"
-          Xvfb :99 -screen 0 1024x768x24 -nolisten tcp > /dev/null 2>&1 &
-          export DISPLAY=:99 && sleep 3
+          ST_PATH="$(pwd)/st_build/ST"
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          export DISPLAY=:99
 
-          # 寻找所有提取的角色目录
-          find all_artifacts -type d -name "TextAsset" | while read ta_dir; do
+          find all_parts -type d -name "TextAsset" | while read ta_dir; do
             char_root=$(dirname "$ta_dir")
             char_name=$(basename "$char_root")
-            echo "Processing $char_name..."
-
-            # 1. 提交原始提取结构到 spinecharacters (包含 TextAsset 和 Texture2D 文件夹)
+            
+            # 1. 提交到 spinecharacters.git (原始结构，原文件名)
             mkdir -p "repo_raw/$char_name"
             cp -r "$char_root"/* "repo_raw/$char_name/"
 
-            # 2. 导出动态 PNG 序列到 BA-SpineCharacters
-            WORK_DIR="work_$char_name"
-            mkdir -p "$WORK_DIR/out"
-            skel_file=$(find "$ta_dir" -name "*.skel" | head -n 1)
-            [ -z "$skel_file" ] && continue
+            # 2. 转换并提交到 BA-SpineCharacters.git
+            CONV_DIR="conv_$char_name"
+            mkdir -p "$CONV_DIR/out"
             
-            # 准备转换环境 (将 skel 和 atlas 放在同级)
-            cp "$skel_file" "$WORK_DIR/$char_name.skel"
-            find "$ta_dir" -name "*.atlas" -exec cp {} "$WORK_DIR/$char_name.atlas" \;
-            cp "$char_root/Texture2D"/*.png "$WORK_DIR/" 2>/dev/null || true
-
-            cd "$WORK_DIR"
-            ANIM_DATA=$($CONVERTER_PATH "$char_name.skel" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v "ANIM_DATA_")
+            # 自动识别：查找该角色目录下最大的文件（通常是 .skel）或带有 skel 字样的文件
+            SKEL_FILE=$(find "$ta_dir" -type f | xargs ls -S | head -n 1)
+            # 找到匹配的 .atlas 文件
+            ATLAS_FILE=$(find "$ta_dir" -type f -name "*.atlas*" | head -n 1)
+            
+            [ -z "$SKEL_FILE" ] && continue
+            
+            # 复制所有文件到转换目录，并为了让 CLI 识别，暂时软链接为规范名
+            cp "$SKEL_FILE" "$CONV_DIR/char.skel"
+            cp "$ATLAS_FILE" "$CONV_DIR/char.atlas"
+            cp "$char_root/Texture2D"/*.png "$CONV_DIR/"
+            
+            cd "$CONV_DIR"
+            # 获取动画列表
+            ANIMS=$($ST_PATH "char.skel" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v "ANIM_DATA_")
             IFS=$'\n'
-            for line in $ANIM_DATA; do
+            for line in $ANIMS; do
               anim=$(echo "$line" | cut -d'|' -f1)
-              $TOOL_PATH export "$char_name.skel" --format Png --animations "$anim" --output "out/${anim}.png" --quiet 2>/dev/null || true
+              # 执行导出
+              $TOOL_PATH export "char.skel" --format Png --animations "$anim" --output "out/${anim}.png" --quiet || true
             done
-            cd out && zip -r "../../repo_zip/${char_name}.zip" . && cd ../..
+            
+            # 打包 ZIP
+            if [ "$(ls -A out)" ]; then
+              cd out && zip -r "../../../repo_zip/${char_name}.zip" . && cd ../..
+            else
+              cd ..
+            fi
           done
 
-          cd repo_raw && git add . && git commit -m "Sync Raw" && git push origin 角色立绘 || true
-          cd ../repo_zip && git add . && git commit -m "Sync Zips" && git push origin main || true
+          cd repo_raw && git add . && git commit -m "Update Raw" && git push origin 角色立绘 || true
+          cd ../repo_zip && git add . && git commit -m "Update PNG Zips" && git push origin main || true
