@@ -178,12 +178,12 @@ jobs:
             # 2. 导出动态 PNG 序列到 BA-SpineCharacters
             WORK_DIR="work_$char_name"
             mkdir -p "$WORK_DIR/out"
-            skel_file=$(find "$ta_dir" -name "*.skel.bytes" | head -n 1)
+            skel_file=$(find "$ta_dir" -name "*.skel" | head -n 1)
             [ -z "$skel_file" ] && continue
             
             # 准备转换环境 (将 skel 和 atlas 放在同级)
             cp "$skel_file" "$WORK_DIR/$char_name.skel"
-            find "$ta_dir" -name "*.atlas.bytes" -exec cp {} "$WORK_DIR/$char_name.atlas" \;
+            find "$ta_dir" -name "*.atlas" -exec cp {} "$WORK_DIR/$char_name.atlas" \;
             cp "$char_root/Texture2D"/*.png "$WORK_DIR/" 2>/dev/null || true
 
             cd "$WORK_DIR"
