@@ -105,13 +105,6 @@ jobs:
       - name: Run Repack Bundles Script
         run: python repack_bundles.py
 
-      - name: Archive Release Assets
-        run: |
-          mkdir -p release_assets
-          zip -r release_assets/output_zips.zip output_zips
-          zip -r release_assets/Android_PatchPack.zip Android_PatchPack
-          zip -r release_assets/iOS_PatchPack.zip iOS_PatchPack
-
       - name: Update Asset Bundles Repository (Git LFS)
         run: |
           cd BA-AssetsBundles
