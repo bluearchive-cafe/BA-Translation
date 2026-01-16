@@ -207,16 +207,27 @@ jobs:
             for repo in spinecharacters spinelobbies; do
               base="spine_output/$repo/$role"
               if [ -d "$base" ]; then
-                skel=$(jq -r ".\"$role\".skel" spine_jobs.json)
                 work=$(mktemp -d)
+
+                cp "$base/TextAsset/"* "$work/" 2>/dev/null || true
+                cp "$base/Texture2D/"* "$work/" 2>/dev/null || true
+
+                skel=$(ls "$work"/*.skel 2>/dev/null | head -n1)
+                if [ -z "$skel" ]; then
+                  rm -rf "$work"
+                  continue
+                fi
+
                 RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
                 echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
                   $TOOL export "$skel" --format Png --animations "$anim" --output "$work/$anim" --quiet 2>/dev/null || true
                 done
+
                 find "$work" -type f -name '*.png' -exec cp {} spine_png_flat/ \;
                 if [ "$(find "$work" -type f -name '*.png' | wc -l)" -gt 0 ]; then
                   (cd "$work" && zip -r "../../BA-SpineCharacters/${role}.zip" .)
                 fi
+
                 rm -rf "$work"
               fi
             done
