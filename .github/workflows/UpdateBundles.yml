@@ -149,9 +149,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
-        run: pip install UnityPy Pillow
-
       - name: Restore cache
         uses: actions/cache/restore@v4
         with:
@@ -167,9 +164,6 @@ jobs:
           cp -r tool/* .
           pip install -r requirements.txt
 
-      - name: Make MemoryPackRepacker executable
-        run: chmod +x ./other/MemoryPackRepacker
-
       - name: Extract spine bundles
         run: python extract_bundles.py
 
@@ -177,15 +171,25 @@ jobs:
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
+          > extract_result.json
+          echo "[" >> extract_result.json
+          first=1
           for repo in spinecharacters spinelobbies; do
             cd $repo
+            git add .
             if [ -n "$(git status --porcelain)" ]; then
-              git add .
+              new_dirs=$(git status --porcelain | awk '/^A/ {print $2}' | cut -d/ -f1 | sort -u)
               git commit -m "Add new spine characters"
               git push origin main
+              for d in $new_dirs; do
+                if [ $first -eq 0 ]; then echo "," >> ../extract_result.json; fi
+                echo "  \"$repo/$d\"" >> ../extract_result.json
+                first=0
+              done
             fi
             cd ..
           done
+          echo "]" >> extract_result.json
 
       - name: Upload spine roles as artifact
         uses: actions/upload-artifact@v4
