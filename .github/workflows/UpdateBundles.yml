@@ -143,28 +143,6 @@ jobs:
 
       - run: python extract_bundles.py
 
-      - run: |
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-
-          rm -rf spine_output
-          mkdir -p spine_output
-
-          for repo in spinecharacters spinelobbies; do
-            cd $repo
-            git add .
-            if [ -n "$(git status --porcelain)" ]; then
-              new_dirs=$(git status --porcelain | awk '/^A/ {print $2}' | cut -d/ -f1 | sort -u)
-              git commit -m "Add new spine assets"
-              git push origin main
-              for d in $new_dirs; do
-                mkdir -p "../spine_output/$repo"
-                cp -r "$d" "../spine_output/$repo/"
-              done
-            fi
-            cd ..
-          done
-
       - uses: actions/upload-artifact@v4
         with:
           name: spine-extracted
@@ -199,7 +177,7 @@ jobs:
           dotnet-version: '8.0.x'
 
       - run: |
-          git clone --depth 1 https://github.com/EsotericSoftware/spine-runtimes.git
+          git clone --depth 1 -b 4.2 https://github.com/EsotericSoftware/spine-runtimes.git
           mkdir -p SpineConverter/spine-csharp
           cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
 
@@ -235,8 +213,8 @@ jobs:
                 echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
                   $TOOL export "$skel" --format Png --animations "$anim" --output "$work/$anim" --quiet 2>/dev/null || true
                 done
-                if [ "$(find "$work" -type f | wc -l)" -gt 0 ]; then
-                  find "$work" -type f -name '*.png' -exec cp {} spine_png_flat/ \;
+                find "$work" -type f -name '*.png' -exec cp {} spine_png_flat/ \;
+                if [ "$(find "$work" -type f -name '*.png' | wc -l)" -gt 0 ]; then
                   (cd "$work" && zip -r "../../BA-SpineCharacters/${role}.zip" .)
                 fi
                 rm -rf "$work"
@@ -247,7 +225,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: spine-pngs
-          path: spine_png_flat/*.png
+          path: spine_png_flat
 
       - run: |
           git config --global user.email "action@github.com"
