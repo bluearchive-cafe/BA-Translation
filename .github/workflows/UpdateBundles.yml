@@ -216,6 +216,8 @@ jobs:
       - name: Clone tool repository
         run: |
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
+          git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
           cp -r tool/* .
 
       - name: Setup .NET
