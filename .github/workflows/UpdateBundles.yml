@@ -202,7 +202,7 @@ jobs:
             libgl1-mesa-dev libxcursor1 libxinerama1 libxi6 libxrandr2
 
       - run: |
-          curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.17.0/SpineViewerCLI-v0.17.0-Linux-SelfContained.zip
+          curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.16.13/SpineViewerCLI-v0.16.13-Linux-SelfContained.zip
           unzip tool.zip
           chmod +x SpineViewerCLI*/SpineViewerCLI
 
