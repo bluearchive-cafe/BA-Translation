@@ -114,6 +114,8 @@ jobs:
           name: Bundles ${{ github.run_id }}
           files: |
             output_zips/
+            iOS_PatchPack/
+            Android_PatchPack/
 
   extract-spine:
     runs-on: ubuntu-latest
