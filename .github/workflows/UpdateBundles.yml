@@ -269,12 +269,18 @@ jobs:
             cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
             cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
             skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
+
             if [ -n "$skel" ]; then
               RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
               echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
                 [ -z "$anim" ] && continue
-                $TOOL export "$skel" --format Png --animations "$anim" --output "$temp_out/$anim.png" --quiet 2>/dev/null || true
+                $TOOL export "$skel" \
+                  --format Png \
+                  --animations "$anim" \
+                  --output "$temp_out/$anim.png" \
+                  --quiet 2>/dev/null || true
               done
+
               if [ "$(find "$temp_out" -type f -name '*.png' | wc -l)" -gt 0 ]; then
                 (cd "$temp_out" && zip -j "../BA-SpineCharacters/${filename}.zip" *.png)
               fi
@@ -282,7 +288,7 @@ jobs:
             rm -rf "$temp_src" "$temp_out"
           done
 
-          echo "Starting lobby processing (1 min loop)..."
+          echo "Starting lobby processing (60s, 16:9)..."
           jq -r '.[] | select(contains("spinelobbies"))' extract_result.json | while read role; do
             base="spine_output/$role"
             [ ! -d "$base" ] && continue
@@ -292,17 +298,32 @@ jobs:
             cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
             cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
             skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
-            
+
             if [ -n "$skel" ]; then
-              $TOOL export "$skel" --format Mp4 --animations "Idle_01" --output "temp_raw.mp4" --quiet 2>/dev/null || true
-              
+              $TOOL export "$skel" \
+                --format Mp4 \
+                --animations "Idle_01" \
+                --output "temp_raw.mp4" \
+                --quiet 2>/dev/null || true
+
               if [ -f "temp_raw.mp4" ]; then
                 duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 temp_raw.mp4)
                 loop_count=$(awk -v dur="$duration" 'BEGIN {print int(60/dur) + 1}')
-                ffmpeg -y -stream_loop "$loop_count" -i temp_raw.mp4 -t 60 -c copy "BA-SpineLobbies/${filename}.mp4" -quiet 2>/dev/null || true
+
+                ffmpeg -y \
+                  -stream_loop "$loop_count" \
+                  -i temp_raw.mp4 \
+                  -vf "scale=iw*min(1920/iw\,1080/ih):ih*min(1920/iw\,1080/ih),pad=1920:1080:(1920-iw*min(1920/iw\,1080/ih))/2:(1080-ih*min(1920/iw\,1080/ih))/2" \
+                  -t 60 \
+                  -pix_fmt yuv420p \
+                  -movflags +faststart \
+                  "BA-SpineLobbies/${filename}.mp4" \
+                  -loglevel error
+
                 rm temp_raw.mp4
               fi
             fi
+
             rm -rf "$temp_src"
           done
 
@@ -310,7 +331,7 @@ jobs:
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          
+
           cd BA-SpineCharacters
           git add .
           git commit -m "Update characters" || true
@@ -319,5 +340,5 @@ jobs:
 
           cd BA-SpineLobbies
           git add .
-          git commit -m "Update lobbies (60s loop)" || true
+          git commit -m "Update lobbies (60s 16:9)" || true
           git push origin main
