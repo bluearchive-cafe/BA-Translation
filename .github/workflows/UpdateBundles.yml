@@ -98,12 +98,16 @@ jobs:
           zip -r release_assets/iOS_PatchPack.zip iOS_PatchPack
 
       - run: |
+          cd BA-AssetsBundles
+          git lfs install
+          git lfs track "*.bundle"
+          git lfs track "*.zip"
+          git add .gitattributes
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          cd BA-AssetsBundles
           git add .
-          git commit -m "Update modified bundles" || true
-          git push origin main || true
+          git commit -m "Update with LFS and max compression" || true
+          git push origin main
 
       - uses: softprops/action-gh-release@v2
         with:
