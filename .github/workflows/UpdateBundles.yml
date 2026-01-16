@@ -164,12 +164,13 @@ jobs:
                 mkdir -p "../spine_output/$repo"
                 cp -r "$d" "../spine_output/$repo/"
                 if [ $first -eq 0 ]; then echo "," >> ../extract_result.json; fi
-                echo "  \"$repo/$d\"" >> ../extract_result.json
+                echo "  \"$d\"" >> ../extract_result.json
                 first=0
               done
             fi
             cd ..
           done
+
           echo "]" >> extract_result.json
 
       - uses: actions/upload-artifact@v4
@@ -197,7 +198,6 @@ jobs:
           path: .
 
       - run: |
-          mv spine_output/* .
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-SpineCharacters.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
@@ -233,17 +233,21 @@ jobs:
           TOOL=$(find . -name SpineViewerCLI | head -n1)
 
           jq -r '.[]' extract_result.json | while read role; do
-            name=$(basename "$role")
-            skel=$(jq -r ".\"$role\".skel" spine_jobs.json)
-            work=$(mktemp -d)
-            RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
-            echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
-              $TOOL export "$skel" --format Png --animations "$anim" --output "$work/${anim}.png" --quiet 2>/dev/null || true
+            for repo in spinecharacters spinelobbies; do
+              base="spine_output/$repo/$role"
+              if [ -d "$base" ]; then
+                skel=$(jq -r ".\"$role\".skel" spine_jobs.json)
+                work=$(mktemp -d)
+                RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
+                echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
+                  $TOOL export "$skel" --format Png --animations "$anim" --output "$work/${anim}.png" --quiet 2>/dev/null || true
+                done
+                if [ "$(ls -A "$work")" ]; then
+                  (cd "$work" && zip -r "../BA-SpineCharacters/${role}.zip" .)
+                fi
+                rm -rf "$work"
+              fi
             done
-            if [ "$(ls -A "$work")" ]; then
-              (cd "$work" && zip -r "../BA-SpineCharacters/${name}.zip" .)
-            fi
-            rm -rf "$work"
           done
 
       - run: |
