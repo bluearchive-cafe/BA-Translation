@@ -1,4 +1,4 @@
-name: Update Bundles
+Name: Update Bundles
 
 on:
   workflow_dispatch:
@@ -16,13 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: Configure SSH Key
+        run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - run: |
+      - name: Clone Required Repositories
+        run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
@@ -31,13 +33,17 @@ jobs:
         with:
           python-version: '3.12'
 
-      - run: pip install UnityPy Pillow requests
+      - name: Install Python Dependencies
+        run: pip install UnityPy Pillow requests
 
-      - run: chmod +x ./other/MemoryPackRepacker
+      - name: Setup Repacker Permissions
+        run: chmod +x ./other/MemoryPackRepacker
 
-      - run: python update_bundles_config.py
+      - name: Generate Bundle Config
+        run: python update_bundles_config.py
 
-      - id: check-cache
+      - name: Check Cache Directory
+        id: check-cache
         run: |
           if [ -d cache_zips ] && [ "$(find cache_zips -type f -name '*.zip' | wc -l)" -gt 0 ]; then
             echo "has-cache=true" >> $GITHUB_OUTPUT
@@ -45,13 +51,15 @@ jobs:
             echo "has-cache=false" >> $GITHUB_OUTPUT
           fi
 
-      - if: steps.check-cache.outputs.has-cache == 'true'
+      - name: Save Cache
+        if: steps.check-cache.outputs.has-cache == 'true'
         uses: actions/cache/save@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - run: |
+      - name: Commit and Push Config Changes
+        run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           git add bundle_config_*.json || true
@@ -65,7 +73,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: Configure SSH Key
+        run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
@@ -75,29 +84,37 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: actions/cache/restore@v4
+      - name: Restore Cache
+        uses: actions/cache/restore@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - run: |
+      - name: Clone Repositories and Install Dependencies
+        run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles-zip.git
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git
           cp -r tool/* .
           pip install -r requirements.txt
 
-      - run: chmod +x ./other/MemoryPackRepacker
+      - name: Setup Repacker Permissions
+        run: chmod +x ./other/MemoryPackRepacker
 
-      - run: python repack_bundles.py
+      - name: Run Repack Bundles Script
+        run: python repack_bundles.py
 
-      - run: |
+      - name: Archive Release Assets
+        run: |
           mkdir -p release_assets
           zip -r release_assets/output_zips.zip output_zips
           zip -r release_assets/Android_PatchPack.zip Android_PatchPack
           zip -r release_assets/iOS_PatchPack.zip iOS_PatchPack
 
-      - run: |
+      - name: Update Asset Bundles Repository (Git LFS)
+        run: |
           cd BA-AssetsBundles
           git lfs install
           git lfs track "*.bundle"
@@ -109,11 +126,13 @@ jobs:
           git commit -m "Update with LFS and max compression" || true
           git push origin main
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: spine-extracted
-          path: |
-            release_assets
+          cd ../BA-AssetsBundles-zip
+          git add .
+          git diff --cached --quiet || (git commit -m "Update bundle zips" && git push)
+
+          cd
+          git add BundlePackingInfo_*.json PatchPack/**/catalog_*.zip
+          git diff --cached --quiet || (git commit -m "Update BundlePackingInfo and catalog" && git push)
 
   extract-spine:
     runs-on: ubuntu-latest
@@ -122,7 +141,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: Configure SSH Key
+        run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
@@ -132,12 +152,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: actions/cache/restore@v4
+      - name: Restore Cache
+        uses: actions/cache/restore@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - run: |
+      - name: Clone Repositories and Install Dependencies
+        run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
           git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
@@ -145,9 +167,11 @@ jobs:
           cp -r tool/* .
           pip install -r requirements.txt
 
-      - run: python extract_bundles.py
+      - name: Run Extract Bundles Script
+        run: python extract_bundles.py
 
-      - run: |
+      - name: Commit and Push Extracted Spine Assets
+        run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
 
@@ -169,7 +193,8 @@ jobs:
             cd ..
           done
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Extracted Spine Artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: spine-extracted
           path: |
@@ -182,34 +207,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: |
+      - name: Configure SSH Key
+        run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - uses: actions/download-artifact@v4
+      - name: Download Spine Artifacts
+        uses: actions/download-artifact@v4
         with:
           name: spine-extracted
           path: .
 
-      - run: |
+      - name: Clone Target Repositories
+        run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-SpineCharacters.git
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-SpineLobbies.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
-      - uses: actions/setup-dotnet@v4
+      - name: Setup .NET environment
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - run: |
+      - name: Build SpineConverter
+        run: |
           git clone --depth 1 -b 4.2 https://github.com/EsotericSoftware/spine-runtimes.git
           mkdir -p SpineConverter/spine-csharp
           cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
           dotnet build SpineConverter/SpineConverter.csproj -c Release
 
-      - run: |
+      - name: Install System Dependencies and SpineViewerCLI
+        run: |
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libfontconfig1 libicu-dev \
             libsfml-graphics2.6 libsfml-window2.6 libsfml-system2.6 \
@@ -218,61 +249,66 @@ jobs:
           unzip tool.zip
           chmod +x SpineViewerCLI*/SpineViewerCLI
 
-      - run: python extract_spine_assets.py
+      - name: Run Extract Spine Assets Script
+        run: python extract_spine_assets.py
 
-      - run: |
+      - name: Convert Spine Assets (Sequential processing)
+        run: |
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
           sleep 3
           TOOL=$(find . -name SpineViewerCLI | head -n1)
 
-          process_characters() {
-            jq -r '.[] | select(contains("spinecharacters"))' extract_result.json | while read role; do
-              base="spine_output/$role"
-              [ ! -d "$base" ] && continue
-              filename=$(basename "$role")
-              temp_src="src_char_${filename}"
-              temp_out="out_char_${filename}"
-              mkdir -p "$temp_src" "$temp_out"
-              cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
-              cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
-              skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
-              if [ -n "$skel" ]; then
-                RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
-                echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
-                  [ -z "$anim" ] && continue
-                  $TOOL export "$skel" --format Png --animations "$anim" --output "$temp_out/$anim.png" --quiet 2>/dev/null || true
-                done
-                if [ "$(find "$temp_out" -type f -name '*.png' | wc -l)" -gt 0 ]; then
-                  (cd "$temp_out" && zip -j "../BA-SpineCharacters/${filename}.zip" *.png)
-                fi
+          echo "Starting character processing..."
+          jq -r '.[] | select(contains("spinecharacters"))' extract_result.json | while read role; do
+            base="spine_output/$role"
+            [ ! -d "$base" ] && continue
+            filename=$(basename "$role")
+            temp_src="src_char_${filename}"
+            temp_out="out_char_${filename}"
+            mkdir -p "$temp_src" "$temp_out"
+            cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
+            cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
+            skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
+            if [ -n "$skel" ]; then
+              RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
+              echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
+                [ -z "$anim" ] && continue
+                $TOOL export "$skel" --format Png --animations "$anim" --output "$temp_out/$anim.png" --quiet 2>/dev/null || true
+              done
+              if [ "$(find "$temp_out" -type f -name '*.png' | wc -l)" -gt 0 ]; then
+                (cd "$temp_out" && zip -j "../BA-SpineCharacters/${filename}.zip" *.png)
               fi
-              rm -rf "$temp_src" "$temp_out"
-            done
-          }
+            fi
+            rm -rf "$temp_src" "$temp_out"
+          done
 
-          process_lobbies() {
-            jq -r '.[] | select(contains("spinelobbies"))' extract_result.json | while read role; do
-              base="spine_output/$role"
-              [ ! -d "$base" ] && continue
-              filename=$(basename "$role")
-              temp_src="src_lobby_${filename}"
-              mkdir -p "$temp_src"
-              cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
-              cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
-              skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
-              if [ -n "$skel" ]; then
-                $TOOL export "$skel" --format Mp4 --animations "Idle_01" --output "BA-SpineLobbies/${filename}.mp4" --quiet 2>/dev/null || true
+          echo "Starting lobby processing (1 min loop)..."
+          jq -r '.[] | select(contains("spinelobbies"))' extract_result.json | while read role; do
+            base="spine_output/$role"
+            [ ! -d "$base" ] && continue
+            filename=$(basename "$role")
+            temp_src="src_lobby_${filename}"
+            mkdir -p "$temp_src"
+            cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
+            cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
+            skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
+            
+            if [ -n "$skel" ]; then
+              $TOOL export "$skel" --format Mp4 --animations "Idle_01" --output "temp_raw.mp4" --quiet 2>/dev/null || true
+              
+              if [ -f "temp_raw.mp4" ]; then
+                duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 temp_raw.mp4)
+                loop_count=$(awk -v dur="$duration" 'BEGIN {print int(60/dur) + 1}')
+                ffmpeg -y -stream_loop "$loop_count" -i temp_raw.mp4 -t 60 -c copy "BA-SpineLobbies/${filename}.mp4" -quiet 2>/dev/null || true
+                rm temp_raw.mp4
               fi
-              rm -rf "$temp_src"
-            done
-          }
+            fi
+            rm -rf "$temp_src"
+          done
 
-          process_characters &
-          process_lobbies &
-          wait
-
-      - run: |
+      - name: Commit and Push Converted Assets
+        run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           
@@ -284,5 +320,5 @@ jobs:
 
           cd BA-SpineLobbies
           git add .
-          git commit -m "Update lobbies" || true
+          git commit -m "Update lobbies (60s loop)" || true
           git push origin main
