@@ -58,59 +58,6 @@ jobs:
           git commit -m "Update bundle config" || true
           git push origin main || true
 
-  repack-bundles:
-    runs-on: ubuntu-latest
-    needs: generate-config
-    if: needs.generate-config.outputs.has-cache == 'true'
-    steps:
-      - uses: actions/checkout@v4
-
-      - run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - uses: actions/cache/restore@v4
-        with:
-          path: cache_zips
-          key: run-${{ github.run_id }}
-
-      - run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
-          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
-          cp -r tool/* .
-          pip install -r requirements.txt
-
-      - run: chmod +x ./other/MemoryPackRepacker
-
-      - run: python repack_bundles.py
-
-      - run: |
-          mkdir -p output_zips Android_PatchPack iOS_PatchPack
-
-      - run: |
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          cd BA-AssetsBundles
-          git add .
-          git commit -m "Update modified bundles" || true
-          git push origin main || true
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: run-${{ github.run_id }}
-          name: Bundles ${{ github.run_id }}
-          files: |
-            output_zips/**
-            Android_PatchPack/**
-            iOS_PatchPack/**
-
   extract-spine:
     runs-on: ubuntu-latest
     needs: generate-config
@@ -146,30 +93,20 @@ jobs:
       - run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          > extract_result.json
-          echo "[" >> extract_result.json
-          first=1
           for repo in spinecharacters spinelobbies; do
             cd $repo
             git add .
-            if [ -n "$(git status --porcelain)" ]; then
-              new_dirs=$(git status --porcelain | awk '/^A/ {print $2}' | cut -d/ -f1 | sort -u)
-              git commit -m "Add new spine characters"
-              git push origin main
-              for d in $new_dirs; do
-                if [ $first -eq 0 ]; then echo "," >> ../extract_result.json; fi
-                echo "  \"$repo/$d\"" >> ../extract_result.json
-                first=0
-              done
-            fi
+            git commit -m "Add new spine assets" || true
+            git push origin main || true
             cd ..
           done
-          echo "]" >> extract_result.json
 
       - uses: actions/upload-artifact@v4
         with:
-          name: spine-roles
-          path: extract_result.json
+          name: spine-extracted
+          path: |
+            spinecharacters
+            spinelobbies
 
   convert-spine:
     runs-on: ubuntu-latest
@@ -185,13 +122,12 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: spine-roles
+          name: spine-extracted
           path: .
 
       - run: |
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-SpineCharacters.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
-          git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
-          git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
           cp -r tool/* .
 
       - uses: actions/setup-dotnet@v4
@@ -212,9 +148,9 @@ jobs:
             libgl1-mesa-dev libxcursor1 libxinerama1 libxi6 libxrandr2
 
       - run: |
-          curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.16.13/SpineViewerCLI-v0.16.13-Linux-SelfContained.zip
+          curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.17.0/SpineViewerCLI-v0.17.0-Linux-SelfContained.zip
           unzip tool.zip
-          chmod +x SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
+          chmod +x SpineViewerCLI*/SpineViewerCLI
 
       - run: python extract_spine_assets.py
 
@@ -222,22 +158,25 @@ jobs:
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
           sleep 3
-          timeout 5s bash -c 'until xdpyinfo -display $DISPLAY >/dev/null 2>&1; do sleep 1; done' || true
-          TOOL=./SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
+          TOOL=$(find . -name SpineViewerCLI | head -n1)
           jq -r 'keys[]' spine_jobs.json | while read role; do
+            name=$(basename "$role")
             skel=$(jq -r ".\"$role\".skel" spine_jobs.json)
-            out="output/$role"
-            mkdir -p "$out"
-            RAW=$(dotnet run --project SpineConverter -- "$skel" 2>&1) || true
+            work=$(mktemp -d)
+            RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
             echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
-              $TOOL export "$skel" --format Png --animations "$anim" --output "$out/${anim}.png" --quiet || true
+              $TOOL export "$skel" --format Png --animations "$anim" --output "$work/${anim}.png" --quiet 2>/dev/null || true
             done
-            (cd output && zip -r "${role}.zip" "$role" || true)
+            if [ "$(ls -A "$work" 2>/dev/null)" ]; then
+              (cd "$work" && zip -r "../BA-SpineCharacters/${name}.zip" .)
+            fi
+            rm -rf "$work"
           done
 
       - run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          git add output/*.zip || true
+          cd BA-SpineCharacters
+          git add *.zip || true
           git commit -m "Add spine animation zips" || true
           git push origin main || true
