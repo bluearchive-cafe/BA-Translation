@@ -97,6 +97,8 @@ jobs:
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git
           cp -r tool/* .
           pip install -r requirements.txt
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
 
       - name: Setup Repacker Permissions
         run: chmod +x ./other/MemoryPackRepacker
