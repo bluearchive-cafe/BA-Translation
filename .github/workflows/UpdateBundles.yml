@@ -220,7 +220,6 @@ jobs:
 
       - run: |
           mkdir -p spine_png_flat
-          mkdir -p 测试
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
           sleep 3
@@ -230,7 +229,7 @@ jobs:
             for repo in spinecharacters spinelobbies; do
               base="spine_output/$role"
               if [ -d "$base" ]; then
-                work="测试"
+                work=$(mktemp -d)
                 filename=$(basename "$role")
 
                 cp "$base/TextAsset/"* "$work/" 2>/dev/null || true
@@ -247,19 +246,15 @@ jobs:
                   $TOOL export "$skel" --format Png --animations "$anim" --output "$work/$anim.png" --quiet 2>/dev/null || true
                 done
 
+                find "$work" -type f -name '*.png' -exec cp {} spine_png_flat/ \;
                 if [ "$(find "$work" -type f -name '*.png' | wc -l)" -gt 0 ]; then
-                  (cd "$work" && zip -r "../BA-SpineCharacters/${filename}.zip" .)
+                  (cd "$work" && zip -j "../BA-SpineCharacters/${filename}.zip" *.png)
                 fi
 
                 rm -rf "$work"
               fi
             done
           done
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: spine-pngs
-          path: spine_png_flat
 
       - run: |
           git config --global user.email "action@github.com"
