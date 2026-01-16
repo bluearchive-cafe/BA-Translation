@@ -233,10 +233,10 @@ jobs:
                 work=$(mktemp -d)
                 RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
                 echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
-                  $TOOL export "$skel" --format Png --animations "$anim" --output "$work/${anim}.png" --quiet 2>/dev/null || true
+                  $TOOL export "$skel" --format Png --animations "$anim" --output "$work/$anim" --quiet 2>/dev/null || true
                 done
-                if [ "$(ls -A "$work")" ]; then
-                  cp "$work"/*.png spine_png_flat/ || true
+                if [ "$(find "$work" -type f | wc -l)" -gt 0 ]; then
+                  find "$work" -type f -name '*.png' -exec cp {} spine_png_flat/ \;
                   (cd "$work" && zip -r "../../BA-SpineCharacters/${role}.zip" .)
                 fi
                 rm -rf "$work"
