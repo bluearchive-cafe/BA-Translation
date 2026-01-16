@@ -1,4 +1,4 @@
-name: Update Bundles
+Name: Update Bundles
 
 on:
   workflow_dispatch:
@@ -109,11 +109,11 @@ jobs:
           git commit -m "Update with LFS and max compression" || true
           git push origin main
 
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: run-${{ github.run_id }}
-          name: Bundles ${{ github.run_id }}
-          files: release_assets/*.zip
+          name: spine-extracted
+          path: |
+            release_assets
 
   extract-spine:
     runs-on: ubuntu-latest
@@ -159,8 +159,8 @@ jobs:
             git add .
             if [ -n "$(git status --porcelain)" ]; then
               new_dirs=$(git status --porcelain | awk '/^A/ {print $2}' | cut -d/ -f1 | sort -u)
-              #git commit -m "Add new spine assets"
-              #git push origin main
+              git commit -m "Add new spine assets"
+              git push origin main
               for d in $new_dirs; do
                 mkdir -p "../spine_output/$repo"
                 cp -r "$d" "../spine_output/$repo/"
@@ -195,6 +195,7 @@ jobs:
 
       - run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-SpineCharacters.git
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-SpineLobbies.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
@@ -206,16 +207,13 @@ jobs:
           git clone --depth 1 -b 4.2 https://github.com/EsotericSoftware/spine-runtimes.git
           mkdir -p SpineConverter/spine-csharp
           cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
-
-      - run: dotnet build SpineConverter/SpineConverter.csproj -c Release
+          dotnet build SpineConverter/SpineConverter.csproj -c Release
 
       - run: |
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libfontconfig1 libicu-dev \
             libsfml-graphics2.6 libsfml-window2.6 libsfml-system2.6 \
             libgl1-mesa-dev libxcursor1 libxinerama1 libxi6 libxrandr2
-
-      - run: |
           curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.16.13/SpineViewerCLI-v0.16.13-Linux-SelfContained.zip
           unzip tool.zip
           chmod +x SpineViewerCLI*/SpineViewerCLI
@@ -228,52 +226,63 @@ jobs:
           sleep 3
           TOOL=$(find . -name SpineViewerCLI | head -n1)
 
-          jq -r '.[]' extract_result.json | while read role; do
-            base="spine_output/$role"
-            
-            if [ -d "$base" ]; then
+          process_characters() {
+            jq -r '.[] | select(contains("spinecharacters"))' extract_result.json | while read role; do
+              base="spine_output/$role"
+              [ ! -d "$base" ] && continue
               filename=$(basename "$role")
-              temp_src="测试_${filename}"
-              temp_out="测试2_${filename}"
+              temp_src="src_char_${filename}"
+              temp_out="out_char_${filename}"
               mkdir -p "$temp_src" "$temp_out"
-
-              echo "Processing: $filename"
-
               cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
               cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
-
               skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
-              
               if [ -n "$skel" ]; then
                 RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
-                
                 echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
                   [ -z "$anim" ] && continue
                   $TOOL export "$skel" --format Png --animations "$anim" --output "$temp_out/$anim.png" --quiet 2>/dev/null || true
                 done
-
                 if [ "$(find "$temp_out" -type f -name '*.png' | wc -l)" -gt 0 ]; then
                   (cd "$temp_out" && zip -j "../BA-SpineCharacters/${filename}.zip" *.png)
-                  echo "Successfully zipped ${filename}.zip"
                 fi
-              else
-                echo "No .skel file found for $filename"
               fi
-              
               rm -rf "$temp_src" "$temp_out"
-            else
-              echo "Directory not found: $base"
-            fi
-          done
+            done
+          }
+
+          process_lobbies() {
+            jq -r '.[] | select(contains("spinelobbies"))' extract_result.json | while read role; do
+              base="spine_output/$role"
+              [ ! -d "$base" ] && continue
+              filename=$(basename "$role")
+              temp_src="src_lobby_${filename}"
+              mkdir -p "$temp_src"
+              cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
+              cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
+              skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
+              if [ -n "$skel" ]; then
+                $TOOL export "$skel" --format Mp4 --animations "Idle_01" --output "BA-SpineLobbies/${filename}.mp4" --quiet 2>/dev/null || true
+              fi
+              rm -rf "$temp_src"
+            done
+          }
+
+          process_characters &
+          process_lobbies &
+          wait
 
       - run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
+          
           cd BA-SpineCharacters
           git add .
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Add spine animation zips for $github.run_id"
-            git push origin main
-          else
-            echo "No changes to commit"
-          fi
+          git commit -m "Update characters" || true
+          git push origin main
+          cd ..
+
+          cd BA-SpineLobbies
+          git add .
+          git commit -m "Update lobbies" || true
+          git push origin main
