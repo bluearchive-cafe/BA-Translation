@@ -71,14 +71,6 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
-          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
-          cp -r tool/* .
-          pip install -r requirements.txt
-          pip install requests
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -87,6 +79,13 @@ jobs:
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
+
+      - run: |
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          cp -r tool/* .
+          pip install -r requirements.txt
 
       - run: chmod +x ./other/MemoryPackRepacker
 
