@@ -117,8 +117,9 @@ jobs:
           git add .
           git commit -m "Update with LFS and max compression" || true
           git push origin main
+          cd
 
-          cd ../BA-AssetsBundles-zip
+          cd BA-AssetsBundles-zip
           git add .
           git diff --cached --quiet || (git commit -m "Update bundle zips" && git push)
 
