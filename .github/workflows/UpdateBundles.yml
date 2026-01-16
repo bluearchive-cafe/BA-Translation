@@ -125,7 +125,7 @@ jobs:
           git diff --cached --quiet || (git commit -m "Update bundle zips" && git push)
 
           cd ..
-          git add BundlePackingInfo_*.json PatchPack/**/catalog_*.zip
+          git add BundlePackingInfo_*.json PatchPack
           git diff --cached --quiet || (git commit -m "Update BundlePackingInfo and catalog" && git push)
 
   extract-spine:
