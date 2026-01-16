@@ -246,7 +246,6 @@ jobs:
                   $TOOL export "$skel" --format Png --animations "$anim" --output "$work/$anim.png" --quiet 2>/dev/null || true
                 done
 
-                find "$work" -type f -name '*.png' -exec cp {} spine_png_flat/ \;
                 if [ "$(find "$work" -type f -name '*.png' | wc -l)" -gt 0 ]; then
                   (cd "$work" && zip -j "../BA-SpineCharacters/${filename}.zip" *.png)
                 fi
