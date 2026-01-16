@@ -229,7 +229,7 @@ jobs:
           TOOL=$(find . -name SpineViewerCLI | head -n1)
 
           jq -r '.[]' extract_result.json | while read role; do
-            base="spine_output/spinecharacters/$role"
+            base="spine_output/$role"
             
             if [ -d "$base" ]; then
               filename=$(basename "$role")
