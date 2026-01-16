@@ -1,4 +1,4 @@
-Name: Update Bundles
+name: Update Bundles
 
 on:
   workflow_dispatch:
