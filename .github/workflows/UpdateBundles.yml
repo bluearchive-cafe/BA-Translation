@@ -94,26 +94,30 @@ jobs:
         run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git
           cp -r tool/* .
           pip install -r requirements.txt
 
       - name: Setup Repacker Permissions
         run: chmod +x ./other/MemoryPackRepacker
 
-      - name: Run Repack Bundles Script
+      - name: Repack Android
         run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git
-          python repack_bundles.py
-
-      - name: Update Asset Bundles Repository (Git LFS)
-        run: |
+          BA_PLATFORM=Android python repack_bundles.py
           cd BA-AssetsBundles
-          git add .
-          git diff --cached --quiet || (git commit -m "Update bundle zips" && git push)
-
+          git add Android
+          git commit -m "Update Android bundles" || true
+          git push || true
           cd ..
-          git add BundlePackingInfo_*.json PatchPack
-          git diff --cached --quiet || (git commit -m "Update BundlePackingInfo and catalog" && git push)
+          rm -rf cache_zips PatchPack Android
+
+      - name: Repack iOS
+        run: |
+          BA_PLATFORM=iOS python repack_bundles.py
+          cd BA-AssetsBundles
+          git add iOS
+          git commit -m "Update iOS bundles" || true
+          git push || true
 
   extract-spine:
     runs-on: ubuntu-latest
