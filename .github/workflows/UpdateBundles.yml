@@ -85,7 +85,7 @@ jobs:
 
       - name: Clone repositories
         run: |
-          git clone git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
@@ -163,6 +163,7 @@ jobs:
           git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
           git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           cp -r tool/* .
           pip install -r requirements.txt
 
@@ -199,7 +200,7 @@ jobs:
 
       - name: Clone tool repository
         run: |
-          git clone git@github.com:beichen23333/BlueArchive-Translation.git tool
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
       - name: Setup .NET
@@ -209,7 +210,7 @@ jobs:
 
       - name: Clone spine runtime
         run: |
-          git clone https://github.com/EsotericSoftware/spine-runtimes.git
+          git clone --depth 1 https://github.com/EsotericSoftware/spine-runtimes.git
           mkdir -p SpineConverter/spine-csharp
           cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
 
