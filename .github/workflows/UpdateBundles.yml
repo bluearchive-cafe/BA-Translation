@@ -167,6 +167,9 @@ jobs:
           cp -r tool/* .
           pip install -r requirements.txt
 
+      - name: Make MemoryPackRepacker executable
+        run: chmod +x ./other/MemoryPackRepacker
+
       - name: Extract spine bundles
         run: python extract_bundles.py
 
