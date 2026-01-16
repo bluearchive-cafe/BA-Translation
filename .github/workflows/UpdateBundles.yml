@@ -109,8 +109,7 @@ jobs:
         with:
           tag_name: run-${{ github.run_id }}
           name: Bundles ${{ github.run_id }}
-          files: |
-            release_assets/*.zip
+          files: release_assets/*.zip
 
   extract-spine:
     runs-on: ubuntu-latest
@@ -137,8 +136,8 @@ jobs:
       - run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
           git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
-          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
+          git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
           pip install -r requirements.txt
 
@@ -147,20 +146,38 @@ jobs:
       - run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
+
+          rm -rf spine_output
+          mkdir -p spine_output
+          > extract_result.json
+          echo "[" >> extract_result.json
+          first=1
+
           for repo in spinecharacters spinelobbies; do
             cd $repo
             git add .
-            git commit -m "Add new spine assets" || true
-            git push origin main || true
+            if [ -n "$(git status --porcelain)" ]; then
+              new_dirs=$(git status --porcelain | awk '/^A/ {print $2}' | cut -d/ -f1 | sort -u)
+              git commit -m "Add new spine assets"
+              git push origin main
+              for d in $new_dirs; do
+                mkdir -p "../spine_output/$repo"
+                cp -r "$d" "../spine_output/$repo/"
+                if [ $first -eq 0 ]; then echo "," >> ../extract_result.json; fi
+                echo "  \"$repo/$d\"" >> ../extract_result.json
+                first=0
+              done
+            fi
             cd ..
           done
+          echo "]" >> extract_result.json
 
       - uses: actions/upload-artifact@v4
         with:
           name: spine-extracted
           path: |
-            spinecharacters
-            spinelobbies
+            spine_output
+            extract_result.json
 
   convert-spine:
     runs-on: ubuntu-latest
@@ -180,6 +197,7 @@ jobs:
           path: .
 
       - run: |
+          mv spine_output/* .
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-SpineCharacters.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
@@ -213,7 +231,8 @@ jobs:
           export DISPLAY=:99
           sleep 3
           TOOL=$(find . -name SpineViewerCLI | head -n1)
-          jq -r 'keys[]' spine_jobs.json | while read role; do
+
+          jq -r '.[]' extract_result.json | while read role; do
             name=$(basename "$role")
             skel=$(jq -r ".\"$role\".skel" spine_jobs.json)
             work=$(mktemp -d)
@@ -221,7 +240,7 @@ jobs:
             echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
               $TOOL export "$skel" --format Png --animations "$anim" --output "$work/${anim}.png" --quiet 2>/dev/null || true
             done
-            if [ "$(ls -A "$work" 2>/dev/null)" ]; then
+            if [ "$(ls -A "$work")" ]; then
               (cd "$work" && zip -r "../BA-SpineCharacters/${name}.zip" .)
             fi
             rm -rf "$work"
