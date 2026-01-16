@@ -118,13 +118,13 @@ jobs:
           git add .
           git commit -m "Update with LFS and max compression" || true
           git push origin main
-          cd
+          cd ..
 
           cd BA-AssetsBundles-zip
           git add .
           git diff --cached --quiet || (git commit -m "Update bundle zips" && git push)
 
-          cd
+          cd ..
           git add BundlePackingInfo_*.json PatchPack/**/catalog_*.zip
           git diff --cached --quiet || (git commit -m "Update BundlePackingInfo and catalog" && git push)
 
@@ -177,8 +177,8 @@ jobs:
             git add .
             if [ -n "$(git status --porcelain)" ]; then
               new_dirs=$(git status --porcelain | awk '/^A/ {print $2}' | cut -d/ -f1 | sort -u)
-              #git commit -m "Add new spine assets"
-              #git push origin main
+              git commit -m "Add new spine assets"
+              git push origin main
               for d in $new_dirs; do
                 mkdir -p "../spine_output/$repo"
                 cp -r "$d" "../spine_output/$repo/"
