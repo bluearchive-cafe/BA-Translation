@@ -92,10 +92,8 @@ jobs:
 
       - name: Clone Repositories and Install Dependencies
         run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles-zip.git BA-AssetsBundles-zip
           cp -r tool/* .
           pip install -r requirements.txt
 
@@ -103,7 +101,10 @@ jobs:
         run: chmod +x ./other/MemoryPackRepacker
 
       - name: Run Repack Bundles Script
-        run: python repack_bundles.py
+        run: |
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles-zip.git
+          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git
+          python repack_bundles.py
 
       - name: Update Asset Bundles Repository (Git LFS)
         run: |
