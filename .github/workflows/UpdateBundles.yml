@@ -150,7 +150,7 @@ jobs:
             spine_output
             extract_result.json
 
-    convert-spine:
+  convert-spine:
     runs-on: ubuntu-latest
     needs: extract-spine
     steps:
