@@ -230,6 +230,7 @@ jobs:
               base="spine_output/$role"
               if [ -d "$base" ]; then
                 work=$(mktemp -d)
+                filename=$(basename "$role")
 
                 cp "$base/TextAsset/"* "$work/" 2>/dev/null || true
                 cp "$base/Texture2D/"* "$work/" 2>/dev/null || true
@@ -247,7 +248,7 @@ jobs:
 
                 find "$work" -type f -name '*.png' -exec cp {} spine_png_flat/ \;
                 if [ "$(find "$work" -type f -name '*.png' | wc -l)" -gt 0 ]; then
-                  (cd "$work" && zip -r "../../BA-SpineCharacters/${role}.zip" .)
+                  (cd "$work" && zip -r "../../BA-SpineCharacters/${filename}.zip" .)
                 fi
 
                 rm -rf "$work"
@@ -267,4 +268,3 @@ jobs:
           git add *.zip || true
           git commit -m "Add spine animation zips" || true
           git push origin main || true
-
