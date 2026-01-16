@@ -219,40 +219,38 @@ jobs:
       - run: python extract_spine_assets.py
 
       - run: |
-          mkdir -p 测试
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
           sleep 3
           TOOL=$(find . -name SpineViewerCLI | head -n1)
 
           jq -r '.[]' extract_result.json | while read role; do
-            for repo in spinecharacters spinelobbies; do
-              base="spine_output/$role"
-              if [ -d "$base" ]; then
-                work="测试"
-                filename=$(basename "$role")
+            base="spine_output/spinecharacters/$role"
+            
+            if [ -d "$base" ]; then
+              filename=$(basename "$role")
+              temp_src="测试_${filename}"
+              temp_out="测试2_${filename}"
+              mkdir -p "$temp_src" "$temp_out"
 
-                cp "$base/TextAsset/"* "$work/" 2>/dev/null || true
-                cp "$base/Texture2D/"* "$work/" 2>/dev/null || true
+              cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
+              cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
 
-                skel=$(ls "$work"/*.skel 2>/dev/null | head -n1)
-                if [ -z "$skel" ]; then
-                  rm -rf "$work"
-                  continue
-                fi
-
+              skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
+              
+              if [ -n "$skel" ]; then
                 RAW=$(dotnet run --project SpineConverter -- "$skel" 2>/dev/null || true)
                 echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
-                  $TOOL export "$skel" --format Png --animations "$anim" --output "$work/$anim.png" --quiet 2>/dev/null || true
+                  $TOOL export "$skel" --format Png --animations "$anim" --output "$temp_out/$anim.png" --quiet 2>/dev/null || true
                 done
 
-                if [ "$(find "$work" -type f -name '*.png' | wc -l)" -gt 0 ]; then
-                  (cd "$work" && zip -j "../BA-SpineCharacters/${filename}.zip" *.png)
+                if [ "$(find "$temp_out" -type f -name '*.png' | wc -l)" -gt 0 ]; then
+                  (cd "$temp_out" && zip -j "../BA-SpineCharacters/${filename}.zip" *.png)
                 fi
-
-                rm -rf "$work"
               fi
-            done
+              
+              rm -rf "$temp_src" "$temp_out"
+            fi
           done
 
       - run: |
