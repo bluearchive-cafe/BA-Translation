@@ -102,25 +102,12 @@ jobs:
 
       - name: Run Repack Bundles Script
         run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles-zip.git
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git
           python repack_bundles.py
 
       - name: Update Asset Bundles Repository (Git LFS)
         run: |
           cd BA-AssetsBundles
-          git lfs install
-          git lfs track "*.bundle"
-          git lfs track "*.zip"
-          git add .gitattributes
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          git add .
-          git commit -m "Update with LFS and max compression" || true
-          git push origin main
-          cd ..
-
-          cd BA-AssetsBundles-zip
           git add .
           git diff --cached --quiet || (git commit -m "Update bundle zips" && git push)
 
