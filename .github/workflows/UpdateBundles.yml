@@ -220,6 +220,7 @@ jobs:
 
       - run: |
           mkdir -p spine_png_flat
+          mkdir -p 测试
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
           sleep 3
@@ -229,7 +230,7 @@ jobs:
             for repo in spinecharacters spinelobbies; do
               base="spine_output/$role"
               if [ -d "$base" ]; then
-                work=$(mktemp -d)
+                work="测试"
                 filename=$(basename "$role")
 
                 cp "$base/TextAsset/"* "$work/" 2>/dev/null || true
