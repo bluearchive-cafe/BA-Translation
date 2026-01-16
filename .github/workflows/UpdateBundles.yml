@@ -227,7 +227,7 @@ jobs:
 
           jq -r '.[]' extract_result.json | while read role; do
             for repo in spinecharacters spinelobbies; do
-              base="spine_output/$repo/$role"
+              base="spine_output/$role"
               if [ -d "$base" ]; then
                 work=$(mktemp -d)
 
