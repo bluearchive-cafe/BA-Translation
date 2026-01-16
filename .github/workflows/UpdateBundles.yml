@@ -113,6 +113,8 @@ jobs:
 
   extract-spine:
     runs-on: ubuntu-latest
+    needs: generate-config
+    if: needs.generate-config.outputs.has-cache == 'true'
     steps:
       - uses: actions/checkout@v4
 
