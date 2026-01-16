@@ -219,6 +219,7 @@ jobs:
       - run: python extract_spine_assets.py
 
       - run: |
+          mkdir -p spine_png_flat
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
           sleep 3
@@ -235,12 +236,18 @@ jobs:
                   $TOOL export "$skel" --format Png --animations "$anim" --output "$work/${anim}.png" --quiet 2>/dev/null || true
                 done
                 if [ "$(ls -A "$work")" ]; then
-                  (cd "$work" && zip -r "../BA-SpineCharacters/${role}.zip" .)
+                  cp "$work"/*.png spine_png_flat/ || true
+                  (cd "$work" && zip -r "../../BA-SpineCharacters/${role}.zip" .)
                 fi
                 rm -rf "$work"
               fi
             done
           done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spine-pngs
+          path: spine_png_flat/*.png
 
       - run: |
           git config --global user.email "action@github.com"
