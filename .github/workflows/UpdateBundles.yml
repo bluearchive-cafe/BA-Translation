@@ -14,38 +14,30 @@ jobs:
     outputs:
       has-cache: ${{ steps.check-cache.outputs.has-cache }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
+      - run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Clone repositories
-        run: |
+      - run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
-        run: pip install UnityPy Pillow requests
+      - run: pip install UnityPy Pillow requests
 
-      - name: Make MemoryPackRepacker executable
-        run: chmod +x ./other/MemoryPackRepacker
+      - run: chmod +x ./other/MemoryPackRepacker
 
-      - name: Generate config and download zips
-        run: python update_bundles_config.py
+      - run: python update_bundles_config.py
 
-      - name: Check cache status
-        id: check-cache
+      - id: check-cache
         run: |
           if [ -d cache_zips ] && [ "$(find cache_zips -type f -name '*.zip' | wc -l)" -gt 0 ]; then
             echo "has-cache=true" >> $GITHUB_OUTPUT
@@ -53,15 +45,13 @@ jobs:
             echo "has-cache=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Save cache
-        if: steps.check-cache.outputs.has-cache == 'true'
+      - if: steps.check-cache.outputs.has-cache == 'true'
         uses: actions/cache/save@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - name: Commit config changes
-        run: |
+      - run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           git add bundle_config_*.json || true
@@ -73,90 +63,77 @@ jobs:
     needs: generate-config
     if: needs.generate-config.outputs.has-cache == 'true'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
+      - run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Clone repositories
-        run: |
+      - run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
+          pip install -r requirements.txt
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
-        run: pip install UnityPy Pillow requests
-
-      - name: Restore cache
-        uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - name: Make MemoryPackRepacker executable
-        run: chmod +x ./other/MemoryPackRepacker
+      - run: chmod +x ./other/MemoryPackRepacker
 
-      - name: Repack bundles
-        run: python repack_bundles.py
+      - run: python repack_bundles.py
 
-      - name: Commit asset bundles
-        run: |
+      - run: |
+          mkdir -p output_zips Android_PatchPack iOS_PatchPack
+
+      - run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           cd BA-AssetsBundles
           git add .
-          git commit -m "Update processed bundles" || true
+          git commit -m "Update modified bundles" || true
           git push origin main || true
 
-      - name: Upload release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: run-${{ github.run_id }}
           name: Bundles ${{ github.run_id }}
           files: |
-            output_zips/
-            iOS_PatchPack/
-            Android_PatchPack/
+            output_zips/**
+            Android_PatchPack/**
+            iOS_PatchPack/**
 
   extract-spine:
     runs-on: ubuntu-latest
     needs: generate-config
     if: needs.generate-config.outputs.has-cache == 'true'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
+      - run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Restore cache
-        uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - name: Clone spine repositories
-        run: |
+      - run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
           git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
@@ -164,11 +141,9 @@ jobs:
           cp -r tool/* .
           pip install -r requirements.txt
 
-      - name: Extract spine bundles
-        run: python extract_bundles.py
+      - run: python extract_bundles.py
 
-      - name: Commit new spine characters
-        run: |
+      - run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           > extract_result.json
@@ -191,8 +166,7 @@ jobs:
           done
           echo "]" >> extract_result.json
 
-      - name: Upload spine roles as artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: spine-roles
           path: extract_result.json
@@ -201,115 +175,69 @@ jobs:
     runs-on: ubuntu-latest
     needs: extract-spine
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
+      - run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Download spine roles artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: spine-roles
           path: .
 
-      - name: Clone tool repository
-        run: |
+      - run: |
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           git clone --depth 1 git@github.com:bluearchive-cafe/spinecharacters.git
           git clone --depth 1 git@github.com:bluearchive-cafe/spinelobbies.git
           cp -r tool/* .
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Clone spine runtime
-        run: |
+      - run: |
           git clone --depth 1 https://github.com/EsotericSoftware/spine-runtimes.git
           mkdir -p SpineConverter/spine-csharp
           cp -r spine-runtimes/spine-csharp/src/* SpineConverter/spine-csharp/
 
-      - name: Build SpineConverter
-        run: dotnet build SpineConverter/SpineConverter.csproj -c Release
+      - run: dotnet build SpineConverter/SpineConverter.csproj -c Release
 
-      - name: Install runtime dependencies
-        run: |
+      - run: |
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libfontconfig1 libicu-dev \
             libsfml-graphics2.6 libsfml-window2.6 libsfml-system2.6 \
             libgl1-mesa-dev libxcursor1 libxinerama1 libxi6 libxrandr2
 
-      - name: Setup SpineViewerCLI
-        run: |
+      - run: |
           curl -L -o tool.zip https://github.com/ww-rm/SpineViewer/releases/download/v0.16.13/SpineViewerCLI-v0.16.13-Linux-SelfContained.zip
           unzip tool.zip
           chmod +x SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
 
-      - name: Prepare spine jobs
-        run: python extract_spine_assets.py
+      - run: python extract_spine_assets.py
 
-      - name: Convert spine to PNG
-        run: |
+      - run: |
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
-          
           sleep 3
-          
-          timeout 5s bash -c 'until xdpyinfo -display $DISPLAY >/dev/null 2>&1; do sleep 1; done' || echo "Xvfb may have warnings but should be running"
-          
+          timeout 5s bash -c 'until xdpyinfo -display $DISPLAY >/dev/null 2>&1; do sleep 1; done' || true
           TOOL=./SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
-          
-          if [ ! -f "spine_jobs.json" ] || [ ! -s "spine_jobs.json" ]; then
-            echo "No spine jobs found"
-            exit 0
-          fi
-          
           jq -r 'keys[]' spine_jobs.json | while read role; do
-            echo "Processing: $role"
             skel=$(jq -r ".\"$role\".skel" spine_jobs.json)
-            
-            if [ ! -f "$skel" ]; then
-              echo "Skeleton file not found: $skel"
-              continue
-            fi
-            
             out="output/$role"
             mkdir -p "$out"
-          
             RAW=$(dotnet run --project SpineConverter -- "$skel" 2>&1) || true
-            echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' 2>/dev/null | \
-              grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
-                echo "  Exporting animation: $anim"
-                $TOOL export "$skel" \
-                  --format Png \
-                  --animations "$anim" \
-                  --output "$out/${anim}.png" \
-                  --quiet 2>/dev/null || echo "  Failed to export: $anim"
-              done
-          
-            if [ -d "$out" ] && [ "$(ls -A "$out" 2>/dev/null | wc -l)" -gt 0 ]; then
-              (cd output && zip -r "${role}.zip" "$role" 2>/dev/null || echo "Failed to create zip for $role")
-            else
-              echo "  No animations exported for $role"
-            fi
+            echo "$RAW" | sed -n '/ANIM_DATA_START/,/ANIM_DATA_END/p' | grep -v ANIM_DATA_ | cut -d'|' -f1 | while read anim; do
+              $TOOL export "$skel" --format Png --animations "$anim" --output "$out/${anim}.png" --quiet || true
+            done
+            (cd output && zip -r "${role}.zip" "$role" || true)
           done
 
-      - name: Commit spine output
-        run: |
+      - run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          mkdir -p output
-          mv spine_output/*.zip output/ 2>/dev/null || true
-          if [ -d output ] && [ "$(ls -A output/*.zip 2>/dev/null | wc -l)" -gt 0 ]; then
-            git add output/*.zip
-            git commit -m "Add spine animation zips"
-            git push origin main
-          else
-            echo "No spine output to commit"
-          fi
+          git add output/*.zip || true
+          git commit -m "Add spine animation zips" || true
+          git push origin main || true
