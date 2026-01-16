@@ -173,7 +173,19 @@ jobs:
       - name: Extract spine bundles
         run: python extract_bundles.py
 
-
+      - name: Commit new spine characters
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          for repo in spinecharacters spinelobbies; do
+            cd $repo
+            if [ -n "$(git status --porcelain)" ]; then
+              git add .
+              git commit -m "Add new spine characters"
+              git push origin main
+            fi
+            cd ..
+          done
 
       - name: Upload spine roles as artifact
         uses: actions/upload-artifact@v4
