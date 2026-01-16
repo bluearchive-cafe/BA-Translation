@@ -14,32 +14,38 @@ jobs:
     outputs:
       has-cache: ${{ steps.check-cache.outputs.has-cache }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: SSH
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Clone Repos
+      - name: Clone repositories
         run: |
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - run: pip install UnityPy Pillow requests
-      - run: chmod +x ./other/MemoryPackRepacker
+      - name: Install Python dependencies
+        run: pip install UnityPy Pillow requests
 
-      - name: Generate Config & Download Changed Zips
+      - name: Make MemoryPackRepacker executable
+        run: chmod +x ./other/MemoryPackRepacker
+
+      - name: Generate config and download zips
         run: python update_bundles_config.py
 
-      - id: check-cache
+      - name: Check cache status
+        id: check-cache
         run: |
           if [ -d cache_zips ] && [ "$(find cache_zips -type f -name '*.zip' | wc -l)" -gt 0 ]; then
             echo "has-cache=true" >> $GITHUB_OUTPUT
@@ -47,13 +53,14 @@ jobs:
             echo "has-cache=false" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/cache/save@v4
+      - name: Save cache
         if: steps.check-cache.outputs.has-cache == 'true'
+        uses: actions/cache/save@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - name: Commit Config
+      - name: Commit config changes
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
@@ -66,39 +73,44 @@ jobs:
     needs: generate-config
     if: needs.generate-config.outputs.has-cache == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: SSH
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Clone Repos
+      - name: Clone repositories
         run: |
           git clone git@github.com:bluearchive-cafe/BA-AssetsBundles.git BA-AssetsBundles
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Image.git ba_image_repo
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - run: pip install UnityPy Pillow requests
+      - name: Install Python dependencies
+        run: pip install UnityPy Pillow requests
 
-      - uses: actions/cache/restore@v4
+      - name: Restore cache
+        uses: actions/cache/restore@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - run: chmod +x ./other/MemoryPackRepacker
+      - name: Make MemoryPackRepacker executable
+        run: chmod +x ./other/MemoryPackRepacker
 
-      - name: Repack Bundles
+      - name: Repack bundles
         run: python repack_bundles.py
 
-      - name: Commit Asset Bundles Cache
+      - name: Commit asset bundles
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
@@ -107,7 +119,7 @@ jobs:
           git commit -m "Update processed bundles" || true
           git push origin main || true
 
-      - name: Upload Release
+      - name: Upload release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: run-${{ github.run_id }}
@@ -121,40 +133,42 @@ jobs:
     runs-on: ubuntu-latest
     needs: generate-config
     if: needs.generate-config.outputs.has-cache == 'true'
-    outputs:
-      roles: ${{ steps.extract.outputs.roles }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: SSH
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - run: pip install UnityPy Pillow
+      - name: Install Python dependencies
+        run: pip install UnityPy Pillow
 
-      - uses: actions/cache/restore@v4
+      - name: Restore cache
+        uses: actions/cache/restore@v4
         with:
           path: cache_zips
           key: run-${{ github.run_id }}
 
-      - name: Clone Spine Repos
+      - name: Clone spine repositories
         run: |
           git clone git@github.com:bluearchive-cafe/spinecharacters.git
           git clone git@github.com:bluearchive-cafe/spinelobbies.git
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
-      - id: extract
+      - name: Extract spine bundles
         run: python extract_bundles.py
 
-      - name: Commit New Spine Characters
+      - name: Commit new spine characters
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
@@ -168,30 +182,43 @@ jobs:
             cd ..
           done
 
+      - name: Upload spine roles as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spine-roles
+          path: extract_result.json
+
   convert-spine:
     runs-on: ubuntu-latest
     needs: extract-spine
-    if: needs.extract-spine.outputs.roles != '[]'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: SSH
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - name: Clone Tool Repo
+      - name: Download spine roles artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: spine-roles
+          path: .
+
+      - name: Clone tool repository
         run: |
           git clone git@github.com:beichen23333/BlueArchive-Translation.git tool
           cp -r tool/* .
 
-      - uses: actions/setup-dotnet@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Clone Spine Runtime
+      - name: Clone spine runtime
         run: |
           git clone https://github.com/EsotericSoftware/spine-runtimes.git
           mkdir -p SpineConverter/spine-csharp
@@ -200,7 +227,7 @@ jobs:
       - name: Build SpineConverter
         run: dotnet build SpineConverter/SpineConverter.csproj -c Release
 
-      - name: Install Runtime Deps
+      - name: Install runtime dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg libfontconfig1 libicu-dev \
@@ -213,10 +240,10 @@ jobs:
           unzip tool.zip
           chmod +x SpineViewerCLI-v0.16.13-Linux-SelfContained/SpineViewerCLI
 
-      - name: Prepare Spine Jobs
+      - name: Prepare spine jobs
         run: python extract_spine_assets.py
 
-      - name: Convert Spine to PNG
+      - name: Convert spine to PNG
         run: |
           Xvfb :99 -screen 0 1024x768x24 &
           export DISPLAY=:99
@@ -242,7 +269,7 @@ jobs:
             (cd output && zip -r "${role}.zip" "$role")
           done
 
-      - name: Commit Spine Output
+      - name: Commit spine output
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
