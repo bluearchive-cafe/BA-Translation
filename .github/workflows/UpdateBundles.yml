@@ -107,6 +107,10 @@ jobs:
         run: |
           BA_PLATFORM=Android python repack_bundles.py
           cd BA-AssetsBundles
+          git lfs install
+          git lfs track "Android/*.zip"
+          git add .gitattributes
+
           git add Android
           git commit -m "Update Android bundles" || true
           git push || true
@@ -117,6 +121,10 @@ jobs:
         run: |
           BA_PLATFORM=iOS python repack_bundles.py
           cd BA-AssetsBundles
+          git lfs install
+          git lfs track "iOS/*.zip"
+          git add .gitattributes
+
           git add iOS
           git commit -m "Update iOS bundles" || true
           git push || true
