@@ -6,9 +6,13 @@ on:
         description: 'Target Directory'
         required: false
         default: ''
-      is_cn: { description: 'CN Voice', type: boolean, default: false }
+      is_cn:
+        description: 'CN Voice'
+        type: boolean
+        default: false
   repository_dispatch:
     types: [Repack]
+
 permissions:
   contents: write
 
@@ -83,11 +87,17 @@ jobs:
         run: |
           python voicecn.py ./BA-VoiceCN/Voice voice_config.json
 
+      - name: Read DB Key
+        id: dbkey
+        run: |
+          DB_KEY="$(cat BA-Text-Translation/Key.txt | tr -d '\r\n')"
+          echo "DB_KEY=$DB_KEY" >> "$GITHUB_ENV"
+
       - name: Update Excel
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json
+          python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json --db_key "$DB_KEY"
 
       - name: Patch Catalog
         env:
@@ -96,8 +106,8 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir}}
-          IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn}}
+          CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir }}
+          IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn }}
         run: |
           python patch_media_catalog.py "$CUSTOM_DIR" "$IS_CN"
           python patch_table_catalog.py "$CUSTOM_DIR"

@@ -122,7 +122,7 @@ jobs:
           BA_PLATFORM=${{ matrix.platform }} python repack_bundles.py
           cd BA-AssetsBundles
           git lfs install
-          git lfs track "${{ matrix.platform }}_PatchPack/*.zip"
+          git lfs track "${{ matrix.platform }}_PatchPack/*.gz"
           git add .gitattributes
           git add ${{ matrix.platform }}_PatchPack
           git commit -m "Update ${{ matrix.platform }} bundles" || true
