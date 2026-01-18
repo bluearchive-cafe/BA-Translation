@@ -283,28 +283,28 @@ jobs:
             rm -rf "$temp_src" "$temp_out"
           done
 
-          echo "Starting lobby processing (60s, 16:9)..."
-          jq -r '.[] | select(contains("spinelobbies"))' extract_result.json | while read role; do
-            base="spine_output/$role"
-            [ ! -d "$base" ] && continue
-            filename=$(basename "$role")
-            temp_src="src_lobby_${filename}"
-            mkdir -p "$temp_src"
-            cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
-            cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
-            skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
+          #echo "Starting lobby processing (60s, 16:9)..."
+          #jq -r '.[] | select(contains("spinelobbies"))' extract_result.json | while read role; do
+            #base="spine_output/$role"
+            #[ ! -d "$base" ] && continue
+            #filename=$(basename "$role")
+            #temp_src="src_lobby_${filename}"
+            #mkdir -p "$temp_src"
+            #cp "$base/TextAsset/"* "$temp_src/" 2>/dev/null || true
+            #cp "$base/Texture2D/"* "$temp_src/" 2>/dev/null || true
+            #skel=$(ls "$temp_src"/*.skel 2>/dev/null | head -n1)
 
-            if [ -n "$skel" ]; then
-              $TOOL export "$skel" \
-                --format Mp4 \
-                --animations "Idle_01" \
-                --viewport \
-                --output "BA-SpineLobbies/${filename}.mp4" \
-                --quiet 2>/dev/null || true
-            fi
+            #if [ -n "$skel" ]; then
+              #$TOOL export "$skel" \
+                #--format Mp4 \
+                #--animations "Idle_01" \
+                #--viewport \
+                #--output "BA-SpineLobbies/${filename}.mp4" \
+                #--quiet 2>/dev/null || true
+            #fi
 
-            rm -rf "$temp_src"
-          done
+            #rm -rf "$temp_src"
+          #done
 
       - name: Commit and Push Converted Assets
         run: |
@@ -317,7 +317,7 @@ jobs:
           git push origin main
           cd ..
 
-          cd BA-SpineLobbies
-          git add .
-          git commit -m "Update lobbies (60s 16:9)" || true
-          git push origin main
+          #cd BA-SpineLobbies
+          #git add .
+          #git commit -m "Update lobbies (60s 16:9)" || true
+          #git push origin main
