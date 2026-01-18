@@ -109,7 +109,7 @@ jobs:
           CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir }}
           IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn }}
         run: |
-          python #patch_media_catalog.py "$CUSTOM_DIR" "$IS_CN"
+          python patch_media_catalog.py "$CUSTOM_DIR" "$IS_CN"
           python patch_table_catalog.py "$CUSTOM_DIR"
 
       - name: Commit and Push Changes
