@@ -116,7 +116,7 @@ jobs:
           update/update_table.sh ${{ matrix.server.id }}
           DB_KEY="$(cat BA-Text-Translation/Key.txt | tr -d '\r\n')"
           echo "DB_KEY=$DB_KEY" >> "$GITHUB_ENV"
-          python unpack_excel.py ./TableBundles/ExcelDB.db ./TableBundles/Excel.zip ./Extracted/FlatData ./unpacked ${{ matrix.server.id }} -db_key "$DB_KEY"
+          python unpack_excel.py ./TableBundles/ExcelDB.db ./TableBundles/Excel.zip ./Extracted/FlatData ./unpacked ${{ matrix.server.id }} --db_key "$DB_KEY"
 
       - name: Organize Artifacts
         run: |
