@@ -77,7 +77,7 @@ jobs:
       - name: Clone Required Repositories
         run: |
           git clone --depth 1 --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-Text.git BA-Text
-          git clone --depth 1 --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git Assets-Repo
+          git clone --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git Assets-Repo
           git clone --depth 1 --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-All-Text.git BA-All-Text
 
       - name: Set up Python
