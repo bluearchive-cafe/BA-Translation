@@ -239,7 +239,7 @@ jobs:
             -H "Authorization: token ${{ secrets.APK_SRC_REPO }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "Repack","client_payload": {"custom_dir": "${{ needs.check.outputs.jp_addressable_name }}","is_cn": "false"}}'
+            -d '{"event_type": "Repack","client_payload": {"custom_dir": "${{ needs.check.outputs.jp_addressable_name }}","is_cn": "false","is_dev": "true"}}'
 
       - name: Run Bundles
         if: needs.check.outputs.jp_changes == 'true'

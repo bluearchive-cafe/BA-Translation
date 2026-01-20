@@ -10,6 +10,10 @@ on:
         description: 'CN Voice'
         type: boolean
         default: false
+      is_dev:
+        description: 'Dev Mode'
+        type: boolean
+        default: false
   repository_dispatch:
     types: [Repack]
 
@@ -37,6 +41,7 @@ jobs:
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-VoiceCN.git
+          git clone --depth 1 git@github.com:bluearchive-cafe/bluearchive-cafe-prod-clientpatch.git
           cp -r tool/* . && rm -rf tool
 
       - name: Set up Python 3.12
@@ -108,15 +113,25 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir }}
           IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn }}
+          IS_DEV: ${{ github.event.inputs.is_dev || github.event.client_payload.is_dev }}
         run: |
-          python patch_media_catalog.py "$CUSTOM_DIR" "$IS_CN"
-          python patch_table_catalog.py "$CUSTOM_DIR"
+          python patch_media_catalog.py
+          python patch_table_catalog.py
 
       - name: Commit and Push Changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add voice_config.json
+          if git diff --staged --quiet; then
+            echo "No file changes to commit."
+          else
+            git commit -m "Update voice_config.json"
+            git push
+          fi
+
+          cd bluearchive-cafe-prod-clientpatch
+          git add .
           if git diff --staged --quiet; then
             echo "No file changes to commit."
           else
