@@ -4,7 +4,7 @@
     <img src="https://img.shields.io/badge/官方网站-https%3A%2F%2Fbluearchive.cafe-blue?style=for-the-badge">
     </a>
     <a href="https://github.com/bluearchive-cafe/BA-Translation/releases/latest">
-    <img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/bluearchive-cafe/BA-Translation?style=for-the-badge&label=最新版本&include_prereleases">
+    <img src="https://img.shields.io/github/v/release/bluearchive-cafe/BA-Translation?style=for-the-badge&label=最新版本&include_prereleases">
     </a>
 </div>
 
