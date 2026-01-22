@@ -98,12 +98,6 @@ jobs:
           DB_KEY="$(cat BA-Text-Translation/Key.txt | tr -d '\r\n')"
           echo "DB_KEY=$DB_KEY" >> "$GITHUB_ENV"
 
-      - name: Update Excel
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: |
-          python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json --db_key "$DB_KEY"
-
       - name: Patch Catalog
         env:
           PYTHONUNBUFFERED: "1"
@@ -115,6 +109,7 @@ jobs:
           IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn }}
           IS_DEV: ${{ github.event.inputs.is_dev || github.event.client_payload.is_dev }}
         run: |
+          python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json --db_key "$DB_KEY"
           python patch_media_catalog.py
           python patch_table_catalog.py
 
