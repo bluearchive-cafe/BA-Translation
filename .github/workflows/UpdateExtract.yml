@@ -134,6 +134,11 @@ jobs:
 
       - name: Run Clean
         run: |
+          rm -rf BA-Text/Revise
+          rm -rf BA-Text/New
+          rm -rf BA-Text/Translation
+          rm -rf BA-Text/Translation_Revise
+          
           NEW_ZIP="Assets-Repo/${{ matrix.name }}${{ steps.v.outputs.BA_VERSION_NAME }}.zip"
           OUT_ZIP="BA-All-Text/${{ matrix.name }}${{ steps.v.outputs.BA_VERSION_NAME }}.zip"
           python -m tools.clean "$NEW_ZIP" "$OUT_ZIP" ${{ matrix.id }}
