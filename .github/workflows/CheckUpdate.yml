@@ -1,5 +1,9 @@
 name: Check Update
 
+concurrency:
+  group: check-update
+  cancel-in-progress: true
+
 on:
   schedule:
     - cron: '0 */6 * * *'
