@@ -63,7 +63,7 @@ jobs:
 
             python update_url.py
 
-            git add info_jp.json info_gl.json info_cn.json info_jp_windows.json
+            git add info_jp.json info_gl.json info_cn.json
             if ! git diff --staged --quiet; then
               git commit -m "Update"
               git push
