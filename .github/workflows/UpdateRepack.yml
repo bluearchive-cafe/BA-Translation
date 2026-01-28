@@ -81,17 +81,15 @@ jobs:
         run: |
           chmod +x update/update_table.sh
           update/update_table.sh JP
-          chmod +x ./other/MemoryPackRepacker
-          ./other/MemoryPackRepacker deserialize table TableBundles/TableCatalog.bytes TableCatalog.json
-          ./other/MemoryPackRepacker deserialize media MediaResources/Catalog/MediaCatalog.bytes MediaResources/Catalog/MediaCatalog.json
-          ./other/MemoryPackRepacker deserialize media MediaResources-Windows/Catalog/MediaCatalog.bytes MediaResources-Windows/Catalog/MediaCatalog.json
+          chmod +x update/update_media.sh
+          update/update_media.sh JP
 
       - name: Update Voice
         if: github.event.inputs.is_cn == 'true' || github.event.client_payload.is_cn == 'true'
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          python voicecn.py ./BA-VoiceCN/Voice voice_config.json
+          python -m catalog.voicecn ./BA-VoiceCN/Voice voice_config.json
 
       - name: Read DB Key
         id: dbkey
@@ -111,8 +109,8 @@ jobs:
           IS_DEV: ${{ github.event.inputs.is_dev || github.event.client_payload.is_dev }}
         run: |
           python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json --db_key "$DB_KEY"
-          python patch_media_catalog.py
-          python patch_table_catalog.py
+          python -m catalog.patch_media_catalog
+          python -m catalog.patch_table_catalog
 
       - name: Commit and Push Changes
         run: |

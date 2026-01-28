@@ -61,7 +61,7 @@ jobs:
           while true; do
             : > "$GITHUB_OUTPUT"
 
-            python update_url.py
+            python -m update.update_url
 
             git add info_jp.json info_gl.json info_cn.json
             if ! git diff --staged --quiet; then
