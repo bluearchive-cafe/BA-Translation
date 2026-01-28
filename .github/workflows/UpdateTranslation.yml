@@ -63,6 +63,7 @@ jobs:
       - name: Run translation
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           FILE_PATH="${{ github.event.client_payload.file_path || inputs.file_path }}"
           OUTPUT_PATH="${{ github.event.client_payload.output_path || inputs.output_path }}"
