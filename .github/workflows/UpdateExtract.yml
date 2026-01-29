@@ -129,7 +129,7 @@ jobs:
           cat /tmp/prev_"$ORIGINAL_FILE".json
           
           echo "Running version.sh on previous info.json:"
-          bash other/version.sh JP /tmp/prev_"$ORIGINAL_FILE".json >> "$GITHUB_OUTPUT"
+          bash other/version.sh ${{ matrix.id }} /tmp/prev_"$ORIGINAL_FILE".json >> "$GITHUB_OUTPUT"
           echo "prev_commit=$PREV_COMMIT" >> "$GITHUB_OUTPUT"
 
       - name: Run Clean
