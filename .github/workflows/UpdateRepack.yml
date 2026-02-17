@@ -3,17 +3,24 @@ on:
   workflow_dispatch:
     inputs:
       custom_dir:
-        description: 'Target Directory'
+        description: 'Target Version'
         required: false
         default: ''
       is_cn:
         description: 'CN Voice'
         type: boolean
         default: false
-      is_dev:
-        description: 'Dev Mode'
+      is_test:
+        description: 'Test Mode'
         type: boolean
         default: false
+      push_mode:
+        description: 'Push Mode'
+        type: choice
+        options:
+          - cf
+          - server
+        default: cf
   repository_dispatch:
     types: [Repack]
 
@@ -106,7 +113,9 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir }}
           IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn }}
-          IS_DEV: ${{ github.event.inputs.is_dev || github.event.client_payload.is_dev }}
+          IS_TEST: ${{ github.event.inputs.is_test || github.event.client_payload.is_test }}
+          PUSH_MODE: ${{ github.event.inputs.push_mode || github.event.client_payload.push_mode }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
         run: |
           python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json --db_key "$DB_KEY"
           python -m catalog.patch_media_catalog
