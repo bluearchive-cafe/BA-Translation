@@ -36,12 +36,18 @@ jobs:
         with:
           submodules: false
 
-      - name: Configure SSH Access
+      - name: Setup ssh key
         run: |
           mkdir -p ~/.ssh
+
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa2
+          chmod 600 ~/.ssh/id_rsa2
+
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+          ssh-keyscan -p 22 server.bluearchive.cafe >> ~/.ssh/known_hosts
 
       - name: Clone repository
         run: |
@@ -115,7 +121,8 @@ jobs:
           IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn }}
           IS_TEST: ${{ github.event.inputs.is_test || github.event.client_payload.is_test }}
           PUSH_MODE: ${{ github.event.inputs.push_mode || github.event.client_payload.push_mode }}
-          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          TOKEN_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_SSH_KEY: /home/runner/.ssh/id_rsa2
         run: |
           python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json --db_key "$DB_KEY"
           python -m catalog.patch_media_catalog
