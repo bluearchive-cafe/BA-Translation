@@ -55,6 +55,7 @@ jobs:
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
           git clone --depth 1 git@github.com:bluearchive-cafe/BA-VoiceCN.git
           git clone --depth 1 git@github.com:bluearchive-cafe/bluearchive-cafe-prod-clientpatch.git
+          git clone --depth 1 git@github.com:bluearchive-cafe/BlueArchive-Media.git BlueArchive-Media
           cp -r tool/* . && rm -rf tool
 
       - name: Set up Python 3.12
