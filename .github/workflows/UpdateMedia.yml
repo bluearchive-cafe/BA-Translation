@@ -86,6 +86,8 @@ jobs:
         if: github.event.inputs.is_cn == 'true' || github.event.client_payload.is_cn == 'true'
         env:
           PYTHONUNBUFFERED: "1"
+          TOKEN_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_SSH_KEY: /home/runner/.ssh/id_rsa2
         run: |
           python -m catalog.voicecn ./BA-VoiceCN/Voice voice_config.json
 
