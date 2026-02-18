@@ -1,4 +1,4 @@
-name: Repack Excel
+name: Update Media
 on:
   workflow_dispatch:
     inputs:
@@ -6,6 +6,10 @@ on:
         description: 'Target Version'
         required: false
         default: ''
+      is_cn:
+        description: 'CN Voice'
+        type: boolean
+        default: false
       is_test:
         description: 'Test Mode'
         type: boolean
@@ -72,30 +76,17 @@ jobs:
         run: |
           bash other/version.sh JP info_jp.json >> "$GITHUB_OUTPUT"
 
-      - name: Cache FlatData
-        id: cache-flatdata
-        uses: actions/cache@v4
-        with:
-          path: Extracted
-          key: JP-flatdata-${{ steps.v.outputs.FLATDATA_VERSION_NAME }}
-
-      - name: Cache Unpack
-        id: cache-unpack
-        uses: actions/cache@v4
-        with:
-          path: workspace/
-          key: JP-unpack-${{ steps.v.outputs.BA_VERSION_NAME }}
-
-      - name: Update table
+      - name: Update media
         run: |
-          chmod +x update/update_table.sh
-          update/update_table.sh JP
+          chmod +x update/update_media.sh
+          update/update_media.sh JP
 
-      - name: Read DB Key
-        id: dbkey
+      - name: Update Voice
+        if: github.event.inputs.is_cn == 'true' || github.event.client_payload.is_cn == 'true'
+        env:
+          PYTHONUNBUFFERED: "1"
         run: |
-          DB_KEY="$(cat BA-Text-Translation/Key.txt | tr -d '\r\n')"
-          echo "DB_KEY=$DB_KEY" >> "$GITHUB_ENV"
+          python -m catalog.voicecn ./BA-VoiceCN/Voice voice_config.json
 
       - name: Patch Catalog
         env:
@@ -111,16 +102,13 @@ jobs:
           TOKEN_KEY: ${{ secrets.SERVER_SSH_KEY }}
           SERVER_SSH_KEY: /home/runner/.ssh/id_rsa2
         run: |
-          python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json --db_key "$DB_KEY"
-          python -m catalog.patch_table_catalog
+          python -m catalog.patch_media_catalog
 
       - name: Commit and Push Changes
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-
-          cd bluearchive-cafe-prod-clientpatch
-          git add .
+          git add voice_config.json
           if git diff --staged --quiet; then
             echo "No file changes to commit."
           else
