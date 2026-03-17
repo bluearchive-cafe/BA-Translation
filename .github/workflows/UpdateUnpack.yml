@@ -108,7 +108,7 @@ jobs:
       - name: Clone FlatData Branch
         if: steps.cache-flatdata.outputs.cache-hit != 'true'
         run: |
-          git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:bluearchive-cafe/BA-FlatData.git repo_data
+          git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:beichen23333/BA-FlatData.git repo_data
 
       - name: Copy CN Dump File
         if: steps.cache-flatdata.outputs.cache-hit != 'true' && matrix.server.id == 'CN'
@@ -127,8 +127,8 @@ jobs:
 
       - name: Clone Text Repository
         run: |
-          git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git BA-Text
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
+          git clone --depth 1 --branch ${{ matrix.server.id }} git@github.com:beichen23333/BA-Assets-TableBundles.git BA-Text
+          git clone --depth 1 git@github.com:beichen23333/BA-Text-Translation.git BA-Text-Translation
 
       - name: Execute Unpack Scripts
         run: |
@@ -205,7 +205,7 @@ jobs:
               zip -r "../../../final-packages/$FILE_NAME" DBSchema ExcelTable
               cd ../../../
 
-              git clone --depth 1 --branch $s git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git "repo-$s"
+              git clone --depth 1 --branch $s git@github.com:beichen23333/BA-Assets-TableBundles.git "repo-$s"
               cp "final-packages/$FILE_NAME" "repo-$s/"
               cd "repo-$s"
               git add .

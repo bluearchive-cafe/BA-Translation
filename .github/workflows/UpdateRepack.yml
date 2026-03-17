@@ -1,22 +1,6 @@
 name: Repack Excel
 on:
   workflow_dispatch:
-    inputs:
-      custom_dir:
-        description: 'Target Version'
-        required: false
-        default: ''
-      is_test:
-        description: 'Test Mode'
-        type: boolean
-        default: false
-      push_mode:
-        description: 'Push Mode'
-        type: choice
-        options:
-          - cf
-          - server
-        default: cf
   repository_dispatch:
     types: [Repack]
 
@@ -39,18 +23,13 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa2
-          chmod 600 ~/.ssh/id_rsa2
-
           ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-          ssh-keyscan -p 22 server.bluearchive.cafe >> ~/.ssh/known_hosts
 
       - name: Clone repository
         run: |
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git tool
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-VoiceCN.git
-          git clone --depth 1 git@github.com:bluearchive-cafe/bluearchive-cafe-prod-clientpatch.git
+          git clone --depth 1 git@github.com:beichen23333/BA-Text-Translation.git BA-Text-Translation
+
           cp -r tool/* . && rm -rf tool
 
       - name: Set up Python 3.12
@@ -100,30 +79,32 @@ jobs:
       - name: Patch Catalog
         env:
           PYTHONUNBUFFERED: "1"
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          CUSTOM_DIR: ${{ github.event.inputs.custom_dir || github.event.client_payload.custom_dir }}
-          IS_CN: ${{ github.event.inputs.is_cn || github.event.client_payload.is_cn }}
-          IS_TEST: ${{ github.event.inputs.is_test || github.event.client_payload.is_test }}
-          PUSH_MODE: ${{ github.event.inputs.push_mode || github.event.client_payload.push_mode }}
-          TOKEN_KEY: ${{ secrets.SERVER_SSH_KEY }}
-          SERVER_SSH_KEY: /home/runner/.ssh/id_rsa2
         run: |
-          python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . voice_config.json --db_key "$DB_KEY"
-          python -m catalog.patch_table_catalog
+          python repack_excel.py "BA-Text-Translation/日服备份.zip" Extracted/FlatData TableBundles workspace . --db_key "$DB_KEY"
+          python -m patch_table_catalog
 
-      - name: Commit and Push Changes
+      - name: Prepare Release Assets
+        id: prepare_assets
         run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
+          mkdir -p release_assets
+          cp 日配/*.db release_assets/
+          cp 日配/TableCatalog.bytes release_assets/
 
-          cd bluearchive-cafe-prod-clientpatch
-          git add .
-          if git diff --staged --quiet; then
-            echo "No file changes to commit."
-          else
-            git commit -m "Update voice_config.json"
-            git push
-          fi
+          echo "RELEASE_TAG=JP-${{ steps.v.outputs.BA_VERSION_NAME }}-$(date +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prepare_assets.outputs.RELEASE_TAG }}
+          name: "Repack Excel - ${{ steps.v.outputs.BA_VERSION_NAME }}"
+          body: |
+            ExcelDB.db打包。
+            游戏版本: ${{ steps.v.outputs.BA_VERSION_NAME }}
+            FL版本: ${{ steps.steps.v.outputs.FLATDATA_VERSION_NAME }}
+          files: |
+            release_assets/*.db
+            release_assets/TableCatalog.bytes
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

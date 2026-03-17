@@ -58,7 +58,7 @@ jobs:
 
       - name: Clone repositories
         run: |
-          git clone --depth 1 --branch JP git@github.com:bluearchive-cafe/BA-Text.git
+          git clone --depth 1 --branch JP git@github.com:beichen23333/BA-Text.git
 
       - name: Run translation
         env:
