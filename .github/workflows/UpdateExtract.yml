@@ -160,12 +160,17 @@ jobs:
     if: always() && needs.setup.outputs.jp == 'true' && needs.deploy.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout BA-Text
-        uses: actions/checkout@v4
-        with:
-          repository: beichen23333/BA-Text
-          ref: JP
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
+      - name: Clone Required Repositories
+        run: |
+          git clone --depth 1 --branch ${{ matrix.id }} git@github.com:beichen23333/BA-Text.git BA-Text
+
       - name: Check Recent Activity
         id: check
         run: |
