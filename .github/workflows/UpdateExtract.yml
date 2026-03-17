@@ -74,9 +74,9 @@ jobs:
 
       - name: Clone Required Repositories
         run: |
-          git clone --depth 1 --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-Text.git BA-Text
-          git clone --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git Assets-Repo
-          git clone --depth 2 --branch ${{ matrix.id }} git@github.com:bluearchive-cafe/BA-All-Text.git BA-All-Text
+          git clone --depth 1 --branch ${{ matrix.id }} git@github.com:beichen23333/BA-Text.git BA-Text
+          git clone --branch ${{ matrix.id }} git@github.com:beichen23333/BA-Assets-TableBundles.git Assets-Repo
+          git clone --depth 2 --branch ${{ matrix.id }} git@github.com:beichen23333/BA-All-Text.git BA-All-Text
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -163,7 +163,7 @@ jobs:
       - name: Checkout BA-Text
         uses: actions/checkout@v4
         with:
-          repository: bluearchive-cafe/BA-Text
+          repository: beichen23333/BA-Text
           ref: JP
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Check Recent Activity

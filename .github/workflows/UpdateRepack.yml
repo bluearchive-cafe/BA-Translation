@@ -58,6 +58,10 @@ jobs:
           path: Extracted
           key: JP-flatdata-${{ steps.v.outputs.FLATDATA_VERSION_NAME }}
 
+      - name: Setup FlatData
+        if: steps.cache-flatdata.outputs.cache-hit != 'true'
+        run: python setup_flatdata.py JP
+
       - name: Cache Unpack
         id: cache-unpack
         uses: actions/cache@v4
@@ -87,6 +91,7 @@ jobs:
         id: prepare_assets
         run: |
           mkdir -p release_assets
+          cp 日配/*.zip release_assets/
           cp 日配/*.db release_assets/
           cp 日配/TableCatalog.bytes release_assets/
 
@@ -103,6 +108,7 @@ jobs:
             FL版本: ${{ steps.steps.v.outputs.FLATDATA_VERSION_NAME }}
           files: |
             release_assets/*.db
+            release_assets/*.zip
             release_assets/TableCatalog.bytes
           draft: false
           prerelease: false
