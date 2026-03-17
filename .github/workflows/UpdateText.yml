@@ -31,7 +31,7 @@ jobs:
       - name: Clone repositories
         run: |
           git clone --depth 1 git@github.com:beichen23333/BlueArchive-Translation.git BlueArchive-Translation
-          git clone --depth 1 --branch JP git@github.com:bluearchive-cafe/BA-Assets-TableBundles.git BA-Assets-TableBundles
+          git clone --depth 1 --branch JP git@github.com:beichen23333/BA-Assets-TableBundles.git BA-Assets-TableBundles
 
       - name: Move contents to current directory
         run: |
@@ -58,7 +58,7 @@ jobs:
 
       - name: Run update
         run: |
-          git clone --depth 1 git@github.com:bluearchive-cafe/BA-Text-Translation.git BA-Text-Translation
+          git clone --depth 1 git@github.com:beichen23333/BA-Text-Translation.git BA-Text-Translation
 
           python -m tools.clean "BA-Assets-TableBundles/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" JP
           python -m tools.update "BA-Text-Translation/日服${{ steps.new_ver.outputs.BA_VERSION_NAME }}.zip" "BA-Text-Translation/日服备份.zip" "BA-Text-Translation/日服备份.zip"
